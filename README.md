@@ -64,8 +64,8 @@ Let's see the statistics for the provided test: ```n``` number of clients sendin
 
 | Number of clients (```n```) | Memory Allocated (Avg) | Memory Allocated (Peak) |
 | --------------------------- | ---------------------- | ----------------------- |
-| 1000                        | 85MB                   | 95MB                    |
-| 2000                        | 160MB                  | 180MB                   |
+| 1000                        | 120MB                  | 180MB                   |
+| 2000                        | 250MB                  | 420MB                   |
 
 > If you changed the size of message to 30 bytes, I would guarantee you can broatcast it to at least 4000 clients with no memory leak (please let me know if I'm wrong tho).
 >

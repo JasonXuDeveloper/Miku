@@ -74,13 +74,13 @@ namespace Miku.Core
                         disposable.Dispose();
                     }
 
-                    ArrayPool<byte>.Shared.Return(_buffers);
                     GC.SuppressFinalize(this);
                 }
                 catch (Exception)
                 {
                     //ignore
                 }
+                ArrayPool<byte>.Shared.Return(_buffers);
                 OnClose?.Invoke(msg);
             }
         }

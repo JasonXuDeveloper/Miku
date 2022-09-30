@@ -14,16 +14,6 @@ namespace Miku.Core
             Interlocked.Exchange(ref _pos, 0);
         }
 
-        public bool Full(Span<byte> data, bool usePacket)
-        {
-            lock (_arr)
-            {
-                var arrLen = _arr.Length;
-                var dLen = data.Length + (usePacket ? 4 : 0);
-                return arrLen - dLen < _pos;
-            }
-        }
-        
         public void Write(Span<byte> data, bool usePacket)
         {
             lock (_arr)

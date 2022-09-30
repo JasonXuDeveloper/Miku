@@ -29,7 +29,7 @@ namespace Miku.ClientTest
                 try
                 {
                     int index = i;
-                    //create client, and optionally set max buffer size (for receive, by default this is 30KB)
+                    //create client, and optionally set max buffer size (for receive, by default this is 30KB, here we defined it as 50KB)
                     Client client = new Client(ip, port, 1024 * 50);
                     //on connect callback
                     client.OnConnected += async () =>
@@ -38,8 +38,8 @@ namespace Miku.ClientTest
                         //here we want to send the message to server each second
                         while (true)
                         {
-                            //wait for 1s
-                            await Task.Delay(1000).ConfigureAwait(false);
+                            //wait for 1s (with some gaps)
+                            await Task.Delay(1000 + index/10).ConfigureAwait(false);
                             //send message calling client.Send(message, usePacket)
                             //usePacket is true by default (recommended), if you don't want to use it, pass the second argument as false
                             //if usePacket is true, please ensure the onMessage callback in your serverside has parsed packets

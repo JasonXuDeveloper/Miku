@@ -118,7 +118,7 @@ namespace Miku.Core
         /// <param name="id"></param>
         public void KickClient(uint id)
         {
-            if (!ClientOnline(id)) return;
+            if(!_clients.ContainsKey(id))return;
             _clients[id].Close("server kicked this client");
         }
 
@@ -131,20 +131,11 @@ namespace Miku.Core
         {
             if(!_clients.ContainsKey(id))return;
             //合并消息
-            if(!_clientBuffers.TryGetValue(id, out var streamBuffer))
+            if(_clientBuffers.TryGetValue(id, out var streamBuffer))
             {
-                streamBuffer = new StreamBuffer();
-                _clientBuffers[id] = streamBuffer;
+                //记录消息内容
+                streamBuffer.Write(message, UsePacket);
             }
-            //满了就先发
-            if (streamBuffer.Full(message, UsePacket))
-            {
-                var seg = streamBuffer.GetBuffer();
-                //发送 (服务端程序不需要指定是否处理粘包，因为底层写入时会处理）
-                _ = _clients[id].Send(seg, false).ConfigureAwait(false);
-            }
-            //记录消息内容
-            streamBuffer.Write(message, UsePacket);
         }
 
         /// <summary>
@@ -188,7 +179,9 @@ namespace Miku.Core
                 {
                     for (int i = 0; i < 10; i++)
                     {
-                        GC.Collect();
+                        GC.Collect(0, GCCollectionMode.Forced);
+                        GC.Collect(1, GCCollectionMode.Forced);
+                        GC.Collect(2, GCCollectionMode.Forced);
                     }
                     Thread.Sleep(10000);
                 }
