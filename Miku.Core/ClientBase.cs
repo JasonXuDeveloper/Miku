@@ -1,6 +1,7 @@
 using System;
 using System.Buffers;
 using System.Net.Sockets;
+using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 
 namespace Miku.Core
@@ -116,7 +117,7 @@ namespace Miku.Core
             }
             catch (Exception ex)
             {
-                Close(ex.Message);
+                Close($"{ex.Message}\n{ex.StackTrace}");
             }
         }
 
@@ -138,7 +139,14 @@ namespace Miku.Core
                         //判断接受的字节数
                         if (_receiveSize > 0)
                         {
-                            Receive(new ArraySegment<byte>(_buffers, 0, _receiveSize));
+                            try
+                            {
+                                Receive(new ArraySegment<byte>(_buffers, 0, _receiveSize));
+                            }
+                            catch (Exception ex)
+                            {
+                                Console.WriteLine($"Receive error: {ex.Message}\n{ex.StackTrace}");
+                            }
                             //重置连续收到空字节数
                             _zeroCount = 0;
                             //继续开始异步接受消息
@@ -164,7 +172,7 @@ namespace Miku.Core
                 }
                 catch (Exception ex)
                 {
-                    Close(ex.Message);
+                    Close($"{ex.Message}\n{ex.StackTrace}");
                 }
             }
         }
@@ -207,14 +215,25 @@ namespace Miku.Core
         /// <summary>
         /// 发送消息方法
         /// </summary>
-        public async ValueTask<int> Send(ArraySegment<byte> buffer)
+        public async ValueTask<int> Send(ArraySegment<byte> buffer, bool usePacket = true)
         {
             int size = 0;
             try
             {
                 if (!_isDispose)
                 {
-                    size  = await Socket.SendAsync(buffer, SocketFlags.None);
+                    if (usePacket)
+                    {
+                        var b = ArrayPool<byte>.Shared.Rent(buffer.Count + 4);
+                        Unsafe.As<byte, int>(ref b[0]) = buffer.Count;
+                        buffer.CopyTo(new ArraySegment<byte>(b, 4, buffer.Count));
+                        size = await Socket.SendAsync(new ArraySegment<byte>(b, 0, buffer.Count + 4), SocketFlags.None);
+                        ArrayPool<byte>.Shared.Return(b);
+                    }
+                    else
+                    {
+                        size  = await Socket.SendAsync(buffer, SocketFlags.None);
+                    }
                 }
             }
             catch

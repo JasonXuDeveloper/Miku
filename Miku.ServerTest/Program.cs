@@ -9,12 +9,17 @@ namespace Miku.ServerTest
     {
         public static void Main(string[] args)
         {
+            //total byte received from clients
             ulong total = 0;
-            //服务端程序
-            Server server = new Server(1333);
-            //全部客户端
+            //all clients connected
             List<uint> clients = new List<uint>();
-            //连接回调
+            //server application
+            Server server = new Server(1333);
+            //use packet (this is true by default)
+            server.UsePacket = true;
+            //set max buffer length (30KB by default)
+            server.MaxBufferSize = 1024 * 30;
+            //on connect callback
             server.OnConnect += id =>
             {
                 Console.WriteLine($"[{id}] is now connected");
@@ -23,20 +28,34 @@ namespace Miku.ServerTest
                     clients.Add(id);
                 }
             };
-            //收到客户端消息回调
-            server.OnMessage += (id, data) =>
+            //on received callback
+            server.OnMessage += (id, message) =>
             {
-                //标记收到的字节
-                Interlocked.Add(ref total, (ulong)data.Count);
-                //广播给全部客户端
-                int cnt = clients.Count;
-                for (int i = 0; i < cnt; i++)
+                //HERE WE USED PACKET IN CLIENTS AS WELL, SO WE NEED TO PARSE IT
+                Packet packet = new Packet(message);
+                //REMEMBER IF YOU MIGHT HAVE MULTIPLE PACKETS FROM ONE MESSAGE, YOU NEED TO USE WHILE LOOP
+                while (packet.Valid) //CHECK VALIDITY
                 {
-                    if (i >= clients.Count) break;
-                    server.SendToClient(clients[i], data);
+                    //GET THE ACTUAL DATA FROM THE PACKET
+                    var data = packet.Data;
+                    //we want to record how much we received in this test
+                    Interlocked.Add(ref total, (ulong)data.Count);
+                    //and we want to broadcast to all clients we had
+                    int cnt = clients.Count;
+                    for (int i = 0; i < cnt; i++)
+                    {
+                        if (i >= clients.Count) break;
+                        //send the data to the client (will automatically convert data to packet if you enabled server.UsePacket)
+                        server.SendToClient(clients[i], data);
+                    }
+
+                    //AS WE MIGHT HAVE MORE THAN ONE PACKET FROM THIS MESSAGE, WE NEED TO READ THE NEXT PACKET
+                    packet = packet.NextPacket;
                 }
+
+                //N.B. If the client does not send a packet, you can process message on your own straight ahead, it's just a ArraySegment<byte>!
             };
-            //客户端断开回调
+            //on disconnect callback
             server.OnDisconnect += (id, msg) =>
             {
                 Console.WriteLine($"[{id}] has been disconnected: {msg}");
@@ -45,11 +64,13 @@ namespace Miku.ServerTest
                     clients.Remove(id);
                 }
             };
-            //启动服务端
+            //START THE SERVER
             server.Start();
+            //HOLD THE APPLICATION
             while (true)
             {
-                Console.WriteLine($"There are {clients.Count} clients in total, and received {total} bytes since start");
+                Console.WriteLine(
+                    $"There are {clients.Count} clients in total, and received {total} bytes since start");
                 Thread.Sleep(1000);
             }
         }

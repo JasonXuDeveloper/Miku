@@ -6,12 +6,25 @@ using System.Net;
 using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using System.Threading;
-using System.Threading.Tasks;
 
 namespace Miku.Core
 {
     public class Server
     {
+        #region CUSTOM
+
+        /// <summary>
+        /// 是否处理粘包
+        /// </summary>
+        public bool UsePacket = true;
+
+        /// <summary>
+        /// 最大客户端和服务端直接缓冲区的大小（默认30KB）
+        /// </summary>
+        public int MaxBufferSize = 30 * 1024;
+        
+        #endregion
+        
         /// <summary>
         /// 监听地址
         /// </summary>
@@ -58,11 +71,6 @@ namespace Miku.Core
         /// 客户端断开回调
         /// </summary>
         public event Action<uint, string> OnDisconnect;
-
-        /// <summary>
-        /// 最大客户端和服务端直接缓冲区的大小（默认30KB）
-        /// </summary>
-        public int MaxBufferSize = 30 * 1024;
         
         /// <summary>
         /// 是否在运行
@@ -127,14 +135,14 @@ namespace Miku.Core
                 streamBuffer = new StreamBuffer();
             }
             //满了就先发
-            if (streamBuffer.Full(message))
+            if (streamBuffer.Full(message, UsePacket))
             {
                 var seg = streamBuffer.GetBuffer();
-                //发送
-                _ = _clients[id].Send(seg).ConfigureAwait(false);
+                //发送 (服务端程序不需要指定是否处理粘包，因为底层写入时会处理）
+                _ = _clients[id].Send(seg, false).ConfigureAwait(false);
             }
             //记录消息内容
-            streamBuffer.Write(message);
+            streamBuffer.Write(message, UsePacket);
         }
 
         /// <summary>
@@ -192,6 +200,8 @@ namespace Miku.Core
         {
             while (IsRunning)
             {
+                //每10s 检查一次
+                Thread.Sleep(1000 * 10);
                 var ids = _clients.Keys.ToArray();
                 foreach (uint id in ids)
                 {
@@ -200,8 +210,6 @@ namespace Miku.Core
                         GetClient(id)?.Close();
                     }
                 }
-                //每10s 检查一次
-                Thread.Sleep(1000 * 10);
             }
         }
         
@@ -240,8 +248,8 @@ namespace Miku.Core
                 var streamBuffer = _clientBuffers[id];
                 var seg = streamBuffer.GetBuffer();
                 if (seg.Count == 0 || seg.Array == null) return;
-                //发送
-                _ = _clients[id].Send(seg).ConfigureAwait(false);;
+                //发送(服务端程序不需要指定是否处理粘包，因为底层写入时会处理）
+                _ = _clients[id].Send(seg, false).ConfigureAwait(false);;
             }
         }
 
