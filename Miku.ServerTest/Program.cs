@@ -46,7 +46,7 @@ namespace Miku.ServerTest
                     for (int i = 0; i < cnt; i++)
                     {
                         if (i >= clients.Count) break;
-                        //send the data to the client (will automatically convert data to packet if you enabled server.UsePacket)
+                        //broadcast the received data to all clients (will automatically convert data to packet if you enabled server.UsePacket)
                         server.SendToClient(clients[i], data);
                     }
                 }
