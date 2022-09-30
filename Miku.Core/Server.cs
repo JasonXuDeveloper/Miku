@@ -129,10 +129,12 @@ namespace Miku.Core
         /// <param name="message"></param>
         public void SendToClient(uint id, ArraySegment<byte> message)
         {
+            if(!_clients.ContainsKey(id))return;
             //合并消息
             if(!_clientBuffers.TryGetValue(id, out var streamBuffer))
             {
                 streamBuffer = new StreamBuffer();
+                _clientBuffers[id] = streamBuffer;
             }
             //满了就先发
             if (streamBuffer.Full(message, UsePacket))

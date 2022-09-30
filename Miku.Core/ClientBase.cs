@@ -11,9 +11,6 @@ namespace Miku.Core
         //封装socket
         internal Socket Socket;
 
-        //回调
-        private AsyncCallback _aCallback;
-
         //接受数据的缓冲区
         private byte[] _buffers;
 
@@ -22,9 +19,6 @@ namespace Miku.Core
 
         //默认10K的缓冲区空间
         private int _bufferSize = 10 * 1024;
-
-        //收取消息状态码
-        private SocketError _receiveError;
 
         //每一次接受到的字节数
         private int _receiveSize;
@@ -46,7 +40,6 @@ namespace Miku.Core
         /// </summary>
         protected void SetSocket(int size)
         {
-            _aCallback = ReceiveCallback;
             _bufferSize = Math.Max(size, _bufferSize);
             _isDispose = false;
             Socket.ReceiveBufferSize = _bufferSize;
@@ -94,17 +87,38 @@ namespace Miku.Core
 
 
         /// <summary>
-        /// 递归接收消息方法
+        /// 接收消息方法
         /// </summary>
-        internal void ReceiveAsync()
+        internal async void ReceiveAsync()
         {
             try
             {
-                if (!_isDispose && Socket.Connected)
+                while (!_isDispose && Socket.Connected)
                 {
-                    Socket.BeginReceive(_buffers, 0, _bufferSize, SocketFlags.None, out _receiveError,
-                        _aCallback, this);
-                    CheckSocketError(_receiveError);
+                    //接受消息
+                    _receiveSize = await Socket.ReceiveAsync(_buffers, SocketFlags.None, default);
+                    //判断接受的字节数
+                    if (_receiveSize > 0)
+                    {
+                        try
+                        {
+                            Receive(new ArraySegment<byte>(_buffers, 0, _receiveSize));
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine($"Receive error: {ex.Message}\n{ex.StackTrace}");
+                        }
+                        //重置连续收到空字节数
+                        _zeroCount = 0;
+                    }
+                    else
+                    {
+                        _zeroCount++;
+                        if (_zeroCount == 5)
+                        {
+                            Close("connection error");
+                        }
+                    }
                 }
             }
             catch (SocketException)
@@ -122,97 +136,6 @@ namespace Miku.Core
         }
 
         /// <summary>
-        /// 接收消息回调函数
-        /// </summary>
-        /// <param name="iar"></param>
-        private void ReceiveCallback(IAsyncResult iar)
-        {
-            if (!_isDispose)
-            {
-                try
-                {
-                    //接受消息
-                    _receiveSize = Socket.EndReceive(iar, out _receiveError);
-                    //检查状态码
-                    if (!CheckSocketError(_receiveError) && SocketError.Success == _receiveError)
-                    {
-                        //判断接受的字节数
-                        if (_receiveSize > 0)
-                        {
-                            try
-                            {
-                                Receive(new ArraySegment<byte>(_buffers, 0, _receiveSize));
-                            }
-                            catch (Exception ex)
-                            {
-                                Console.WriteLine($"Receive error: {ex.Message}\n{ex.StackTrace}");
-                            }
-                            //重置连续收到空字节数
-                            _zeroCount = 0;
-                            //继续开始异步接受消息
-                            ReceiveAsync();
-                        }
-                        else
-                        {
-                            _zeroCount++;
-                            if (_zeroCount == 5)
-                            {
-                                Close("connection error");
-                            }
-                        }
-                    }
-                }
-                catch (SocketException)
-                {
-                    Close("connection has been closed");
-                }
-                catch (ObjectDisposedException)
-                {
-                    Close("connection has been closed");
-                }
-                catch (Exception ex)
-                {
-                    Close($"{ex.Message}\n{ex.StackTrace}");
-                }
-            }
-        }
-
-        /// <summary>
-        /// 错误判断
-        /// </summary>
-        /// <param name="socketError"></param>
-        /// <returns></returns>
-        private bool CheckSocketError(SocketError socketError)
-        {
-            switch ((socketError))
-            {
-                case SocketError.SocketError:
-                case SocketError.VersionNotSupported:
-                case SocketError.TryAgain:
-                case SocketError.ProtocolFamilyNotSupported:
-                case SocketError.ConnectionAborted:
-                case SocketError.ConnectionRefused:
-                case SocketError.ConnectionReset:
-                case SocketError.Disconnecting:
-                case SocketError.HostDown:
-                case SocketError.HostNotFound:
-                case SocketError.HostUnreachable:
-                case SocketError.NetworkDown:
-                case SocketError.NetworkReset:
-                case SocketError.NetworkUnreachable:
-                case SocketError.NoData:
-                case SocketError.OperationAborted:
-                case SocketError.Shutdown:
-                case SocketError.SystemNotReady:
-                case SocketError.TooManyOpenSockets:
-                    Close(socketError.ToString());
-                    return true;
-            }
-
-            return false;
-        }
-
-        /// <summary>
         /// 发送消息方法
         /// </summary>
         public async ValueTask<int> Send(ArraySegment<byte> buffer, bool usePacket = true)
@@ -227,12 +150,12 @@ namespace Miku.Core
                         var b = ArrayPool<byte>.Shared.Rent(buffer.Count + 4);
                         Unsafe.As<byte, int>(ref b[0]) = buffer.Count;
                         buffer.CopyTo(new ArraySegment<byte>(b, 4, buffer.Count));
-                        size = await Socket.SendAsync(new ArraySegment<byte>(b, 0, buffer.Count + 4), SocketFlags.None);
+                        size = await Socket.SendAsync(new ArraySegment<byte>(b, 0, buffer.Count + 4), SocketFlags.None, default);
                         ArrayPool<byte>.Shared.Return(b);
                     }
                     else
                     {
-                        size  = await Socket.SendAsync(buffer, SocketFlags.None);
+                        size  = await Socket.SendAsync(buffer, SocketFlags.None, default);
                     }
                 }
             }
