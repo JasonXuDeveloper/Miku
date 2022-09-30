@@ -13,7 +13,7 @@ High performance TCP server/client library
 | TCP Server                                                   | Sep 29, 2022   |
 | TCP Client                                                   | Sep 29, 2022   |
 | Basic event callbacks for both Server and Client             | Sep 29, 2022   |
-| Applicating of ArrayPool to control memory allocation        | Sep 29, 2022   |
+| Application of ArrayPool to control memory allocation        | Sep 29, 2022   |
 | Application of async to ensure concurrencing                 | Sep 29, 2022   |
 | Thread safe process and callbacks                            | Sep 29, 2022   |
 | Merge data then send (reduce cpu usage)                      | Sep 29, 2022   |
