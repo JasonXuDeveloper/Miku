@@ -1,6 +1,6 @@
 using System;
-using System.Runtime.CompilerServices;
 using System.Threading;
+using System.Runtime.CompilerServices;
 
 namespace Miku.Core
 {
@@ -43,8 +43,7 @@ namespace Miku.Core
                 //write packet size
                 if (usePacket)
                 {
-                    ref var dest = ref _arr.AsSpan(_pos).GetPinnableReference();
-                    Unsafe.WriteUnaligned(ref dest, data.Length);
+                    Unsafe.As<byte, int>(ref _arr[_pos]) = data.Length;
                     Interlocked.Add(ref _pos, 4);
                 }
                 

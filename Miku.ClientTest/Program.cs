@@ -54,20 +54,30 @@ namespace Miku.ClientTest
                     {
                         //AS THE SERVER WE CHOSE TO USE PACKETS, WE NEED TO PARSE THE MESSAGE
                         Packet packet = new Packet(message);
-                        while (packet.Valid) //CHECK THE VALIDITY OF THE PACKET
+                        //REMEMBER YOU MIGHT HAVE MULTIPLE PACKETS FROM ONE MESSAGE, YOU NEED TO ITERATE
+                        //WE CAN USE FOREACH TO RETRIEVE ALL PACKETS FROM ANY PACKET (AS PACKETS ARE IN CHAIN)
+                        foreach (var p in packet)
                         {
                             //GET DATA INSIDE THE PACKET
-                            var pData = packet.Data;
+                            var pData = p.Data;
                             //here we want to see whether or not the packet feature is accurate
-                            if (packet.Length != 100 || packet.Length != pData.Count)
+                            if (p.Length != 100 || p.Length != pData.Count)
                                 Console.WriteLine(
                                     $"[{index}] Packet data is not 100 bytes or the packet data length is " +
                                     $"not equal to the packet's header length, something went wrong with the packet!");
                             //here we just want to record the total bytes received
                             Interlocked.Add(ref total, (ulong)pData.Count);
+                        }
+                        //OR YOU CAN USE WHILE LOOP ALTERNATIVELY:
+                        /*
+                        while (packet.Valid) //CHECK THE VALIDITY OF THE PACKET
+                        {
+                            //your logic here
+                            myCallback(packet.Data);
                             //AS WE MIGHT HAVE MORE THAN ONE PACKET FROM THE MESSAGE, NEED TO ITERATE TO THE NEXT PACKET
                             packet = packet.NextPacket;
                         }
+                        */
                     };
                     //on disconnect callback
                     client.OnClose += (msg) =>

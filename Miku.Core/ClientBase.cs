@@ -1,8 +1,8 @@
 using System;
 using System.Buffers;
 using System.Net.Sockets;
-using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
+using System.Runtime.CompilerServices;
 
 namespace Miku.Core
 {
