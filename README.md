@@ -8,19 +8,19 @@ High performance TCP server/client library
 
 ## Features
 
-| Name                                                  | Completed date |
-| ----------------------------------------------------- | -------------- |
-| TCP Server                                            | Sep 29, 2022   |
-| TCP Client                                            | Sep 29, 2022   |
-| Basic event callbacks for both Server and Client      | Sep 29, 2022   |
-| Applicating of ArrayPool to control memory allocation | Sep 29, 2022   |
-| Application of async to ensure concurrencing          | Sep 29, 2022   |
-| Thread safe process and callbacks                     | Sep 29, 2022   |
-| Merge data then send (reduce cpu usage)               | Sep 29, 2022   |
-| Check TCP status and disconnect when unavaliable      | Sep 29, 2022   |
-| Packet (ensure reading the correct length of data)    | N/A            |
-| Encryption (optional, xor)                            | N/A            |
-| Compression (optional, zlib)                          | N/A            |
+| Name                                                         | Completed date |
+| ------------------------------------------------------------ | -------------- |
+| TCP Server                                                   | Sep 29, 2022   |
+| TCP Client                                                   | Sep 29, 2022   |
+| Basic event callbacks for both Server and Client             | Sep 29, 2022   |
+| Applicating of ArrayPool to control memory allocation        | Sep 29, 2022   |
+| Application of async to ensure concurrencing                 | Sep 29, 2022   |
+| Thread safe process and callbacks                            | Sep 29, 2022   |
+| Merge data then send (reduce cpu usage)                      | Sep 29, 2022   |
+| Check TCP status and disconnect when unavaliable             | Sep 29, 2022   |
+| Packet (optional, ensure reading the correct length of data) | N/A            |
+| Encryption (optional, xor)                                   | N/A            |
+| Compression (optional, zlib)                                 | N/A            |
 
 
 
@@ -39,6 +39,8 @@ Please run this first to start the server
 ### Miku.ClientTest
 
 Please run this after starting the server, and it should connect to the server automatically and start sending and receiving messages
+
+> You can also change the testCount in ```Program.cs```, by default there would be 1000 clients
 
 
 

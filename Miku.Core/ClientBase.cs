@@ -1,4 +1,5 @@
 using System;
+using System.Buffers;
 using System.Net.Sockets;
 using System.Threading.Tasks;
 
@@ -49,7 +50,7 @@ namespace Miku.Core
             _isDispose = false;
             Socket.ReceiveBufferSize = _bufferSize;
             Socket.SendBufferSize = _bufferSize;
-            _buffers = GC.AllocateUninitializedArray<byte>(_bufferSize);
+            _buffers = ArrayPool<byte>.Shared.Rent(_bufferSize);
         }
 
 
@@ -57,7 +58,7 @@ namespace Miku.Core
         /// 关闭并释放资源
         /// </summary>
         /// <param name="msg"></param>
-        public void Close(string msg = "主动断开连接")
+        public void Close(string msg = "closed manually")
         {
             if (!_isDispose)
             {
@@ -79,7 +80,7 @@ namespace Miku.Core
                         disposable.Dispose();
                     }
 
-                    _buffers = null;
+                    ArrayPool<byte>.Shared.Return(_buffers);
                     GC.SuppressFinalize(this);
                 }
                 catch (Exception)
@@ -107,15 +108,17 @@ namespace Miku.Core
             }
             catch (SocketException)
             {
-                Close("链接已经被关闭");
+                Close("connection has been closed");
             }
             catch (ObjectDisposedException)
             {
-                Close("链接已经被关闭");
+                Close("connection has been closed");
+            }
+            catch (Exception ex)
+            {
+                Close(ex.Message);
             }
         }
-
-
 
         /// <summary>
         /// 接收消息回调函数
@@ -146,18 +149,22 @@ namespace Miku.Core
                             _zeroCount++;
                             if (_zeroCount == 5)
                             {
-                                Close("错误链接");
+                                Close("connection error");
                             }
                         }
                     }
                 }
                 catch (SocketException)
                 {
-                    Close("链接已经被关闭");
+                    Close("connection has been closed");
                 }
                 catch (ObjectDisposedException)
                 {
-                    Close("链接已经被关闭");
+                    Close("connection has been closed");
+                }
+                catch (Exception ex)
+                {
+                    Close(ex.Message);
                 }
             }
         }
@@ -210,13 +217,9 @@ namespace Miku.Core
                     size  = await Socket.SendAsync(buffer, SocketFlags.None);
                 }
             }
-            catch (ObjectDisposedException)
-            {
-                Close("链接已经被关闭");
-            }
             catch
             {
-                Close("链接已经被关闭");
+                Close("connection has been closed");
             }
 
             return size;

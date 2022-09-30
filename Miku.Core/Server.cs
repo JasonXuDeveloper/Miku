@@ -111,7 +111,7 @@ namespace Miku.Core
         public void KickClient(uint id)
         {
             if (!ClientOnline(id)) return;
-            _clients[id].Close("服务端主动将客户端踢下线");
+            _clients[id].Close("server kicked this client");
         }
 
         /// <summary>
@@ -131,7 +131,7 @@ namespace Miku.Core
             {
                 var seg = streamBuffer.GetBuffer();
                 //发送
-                _ = _clients[id].Send(seg);
+                _ = _clients[id].Send(seg).ConfigureAwait(false);
             }
             //记录消息内容
             streamBuffer.Write(message);
@@ -147,7 +147,6 @@ namespace Miku.Core
             _ip = localEp;
             try
             {
-                Console.WriteLine($"Listen Tcp -> {localEp} ");
                 _listeners = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
             }
             catch (Exception ex)
@@ -164,11 +163,10 @@ namespace Miku.Core
         {
             _listeners.Bind(_ip);
             _listeners.Listen(3000);
-            SocketAsyncEventArgs sea = new SocketAsyncEventArgs();
-            sea.Completed += AcceptCallback;
+            Console.WriteLine($"Listen Tcp -> {Ip} ");
             IsRunning = true;
             //单独一个线程检测连接
-            new Thread(() => AcceptAsync(sea)).Start();
+            new Thread(AcceptAsync).Start();
             //单独一个线程检测客户端是否在线
             new Thread(CheckStatus).Start();
             //单独一个线程派发
@@ -178,13 +176,10 @@ namespace Miku.Core
             {
                 while (IsRunning)
                 {
-                    GC.Collect();
-                    GC.Collect();
-                    GC.Collect();
-                    GC.Collect();
-                    GC.Collect();
-                    GC.Collect();
-                    GC.Collect();
+                    for (int i = 0; i < 10; i++)
+                    {
+                        GC.Collect();
+                    }
                     Thread.Sleep(10000);
                 }
             }).Start();
@@ -217,12 +212,15 @@ namespace Miku.Core
         {
             while (IsRunning)
             {
-                var cnt = _ids.Count;
-                for (int i = 0; i < cnt; i++)
+                lock (_ids)
                 {
-                    if(i >= _ids.Count) continue;
-                    var id = _ids[i];
-                    SendToClient(id);
+                    var cnt = _ids.Count;
+                    for (int i = 0; i < cnt; i++)
+                    {
+                        if(i >= _ids.Count) continue;
+                        var id = _ids[i];
+                        SendToClient(id);
+                    }
                 }
                 //每1ms 检查一次
                 Thread.Sleep(1);
@@ -243,27 +241,7 @@ namespace Miku.Core
                 var seg = streamBuffer.GetBuffer();
                 if (seg.Count == 0 || seg.Array == null) return;
                 //发送
-                _ = _clients[id].Send(seg);
-            }
-        }
-        
-        /// <summary>
-        /// 异步接收
-        /// </summary>
-        /// <param name="sae"></param>
-        private void AcceptAsync(SocketAsyncEventArgs sae)
-        {
-            if (!_disposed)
-            {
-                sae.AcceptSocket = null;
-                if (!_listeners.AcceptAsync(sae))
-                {
-                    AcceptCallback(this, sae);
-                }
-            }
-            else
-            {
-                sae.Dispose();
+                _ = _clients[id].Send(seg).ConfigureAwait(false);;
             }
         }
 
@@ -271,53 +249,59 @@ namespace Miku.Core
         /// 当前连接的客户端id
         /// </summary>
         private uint _curId;
-
+        
         /// <summary>
-        /// 接收回调
+        /// 异步接收
         /// </summary>
-        /// <param name="sender"></param>
-        /// <param name="sae"></param>
-        private void AcceptCallback(object sender, SocketAsyncEventArgs sae)
+        private async void AcceptAsync()
         {
-            if (sae.SocketError == SocketError.Success)
+            while (IsRunning)
             {
-                Interlocked.Increment(ref _curId);
-                var id = _curId;
-                var client = new Client(sae.AcceptSocket, MaxBufferSize);
-                client.Socket.ReceiveTimeout = 1000 * 60 * 5;//5分钟没收到东西就算超时
-                if (_clients.TryAdd(id, client))
+                try
                 {
-                    if (!_clientBuffers.TryGetValue(id, out var streamBuffer))
+                    var socket = await _listeners.AcceptAsync();
+                    Interlocked.Increment(ref _curId);
+                    var id = _curId;
+                    var client = new Client(socket, MaxBufferSize);
+                    client.Socket.ReceiveTimeout = 1000 * 60 * 5;//5分钟没收到东西就算超时
+                    if (_clients.TryAdd(id, client))
                     {
-                        _clientBuffers.TryAdd(id, new StreamBuffer());
+                        if (!_clientBuffers.TryGetValue(id, out var streamBuffer))
+                        {
+                            _clientBuffers.TryAdd(id, new StreamBuffer());
+                        }
+                        streamBuffer?.Reset();
+                        lock (_ids)
+                        {
+                            _ids.Add(id);
+                        }
+                        client.OnReceived += arr =>
+                        {
+                            OnMessage?.Invoke(id, arr);
+                        };
+                        client.OnClose += msg =>
+                        {
+                            lock (_ids)
+                            {
+                                _ids.Remove(id);
+                            }
+                            _clients.TryRemove(id, out _);
+                            OnDisconnect?.Invoke(id, msg);
+                        };
+                        OnConnect?.Invoke(id);
+                        client.Start();
                     }
-                    streamBuffer?.Reset();
-                    _ids.Add(id);
-                    client.OnReceived += arr => { Task.Run(()=>OnMessage?.Invoke(id, arr)); };
-                    client.OnClose += msg =>
+                    else
                     {
-                        _ids.Remove(id);
-                        _clients.TryRemove(id, out _);
-                        OnDisconnect?.Invoke(id, msg);
-                    };
-                    OnConnect?.Invoke(id);
-                    client.Start();
+                        Console.WriteLine(
+                            $"ERROR WITH Remote Socket LocalEndPoint：{socket.LocalEndPoint} RemoteEndPoint：{socket.RemoteEndPoint}");
+                        Console.WriteLine();
+                    }
                 }
-                else
+                catch (Exception ex)
                 {
-                    Console.WriteLine(
-                        $"ERROR WITH Remote Socket LocalEndPoint：{sae.AcceptSocket?.LocalEndPoint} RemoteEndPoint：{sae.AcceptSocket?.RemoteEndPoint}");
-                    Console.WriteLine();
+                    Console.WriteLine(ex);
                 }
-            }
-
-            if (!_disposed)
-            {
-                AcceptAsync(sae);
-            }
-            else
-            {
-                sae.Dispose();
             }
         }
 

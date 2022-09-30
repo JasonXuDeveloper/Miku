@@ -33,11 +33,11 @@ namespace Miku.ClientTest
                         //连接成功回调
                         client.OnConnected += async () =>
                         {
-                            Console.WriteLine($"{index}连上了");
+                            Console.WriteLine($"{index} is now connected to the server");
                             //每秒发一次
                             while (true)
                             {
-                                await Task.Delay(1000 + index/10).ConfigureAwait(false);
+                                await Task.Delay(1000).ConfigureAwait(false);
                                 await client.Send(data).ConfigureAwait(false);
                             }
                         };
@@ -48,13 +48,13 @@ namespace Miku.ClientTest
                             Interlocked.Add(ref total, (ulong)message.Count);
                         };
                         //断开连接回调
-                        client.OnClose += (msg) => { Console.WriteLine($"{index}断开了: {msg}"); };
+                        client.OnClose += (msg) => { Console.WriteLine($"{index} is now disconnected from the server: {msg}"); };
                         //连接服务端
                         client.Connect();
                     }
                     catch (Exception ex)
                     {
-                        Console.WriteLine($"无法继续创建客户端：{ex}");
+                        Console.WriteLine($"can not continue creating clients: {ex}");
                         testCount = i;
                         break;
                     }
@@ -64,7 +64,7 @@ namespace Miku.ClientTest
 
             while (true)
             {
-                Console.WriteLine($"全部客户端累计共收到{total}个字节");
+                Console.WriteLine($"All clients received {total} bytes altogether");
                 Thread.Sleep(1000);
             }
         }

@@ -17,8 +17,11 @@ namespace Miku.ServerTest
             //连接回调
             server.OnConnect += id =>
             {
-                Console.WriteLine($"[{id}] 已连接服务端");
-                clients.Add(id);
+                Console.WriteLine($"[{id}] is now connected");
+                lock (clients)
+                {
+                    clients.Add(id);
+                }
             };
             //收到客户端消息回调
             server.OnMessage += (id, data) =>
@@ -29,20 +32,24 @@ namespace Miku.ServerTest
                 int cnt = clients.Count;
                 for (int i = 0; i < cnt; i++)
                 {
+                    if (i >= clients.Count) break;
                     server.SendToClient(clients[i], data);
                 }
             };
             //客户端断开回调
             server.OnDisconnect += (id, msg) =>
             {
-                Console.WriteLine($"[{id}] 已断开连接: {msg}");
-                clients.Remove(id);
+                Console.WriteLine($"[{id}] has been disconnected: {msg}");
+                lock (clients)
+                {
+                    clients.Remove(id);
+                }
             };
             //启动服务端
             server.Start();
             while (true)
             {
-                Console.WriteLine($"全部共{clients.Count}个客户端，共收到{total}字节");
+                Console.WriteLine($"There are {clients.Count} clients in total, and received {total} bytes since start");
                 Thread.Sleep(1000);
             }
         }
