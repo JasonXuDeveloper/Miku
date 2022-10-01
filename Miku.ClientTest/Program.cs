@@ -13,7 +13,8 @@ namespace Miku.ClientTest
             //number of clients to create
             int testCount = 1000;
             //total number of bytes received across all clients
-            ulong total = 0;
+            ulong totalReceived = 0;
+            ulong totalSent = 0;
             //server info
             string ip = "127.0.0.1";
             int port = 1333;
@@ -39,12 +40,13 @@ namespace Miku.ClientTest
                         while (true)
                         {
                             //wait for 1s (with some gaps)
-                            await Task.Delay(1000 + index/10).ConfigureAwait(false);
+                            await Task.Delay(1000).ConfigureAwait(false);
                             //send message calling client.Send(message, usePacket)
                             //usePacket is true by default (recommended), if you don't want to use it, pass the second argument as false
                             //if usePacket is true, please ensure the onMessage callback in your serverside has parsed packets
                             //you dont have to use ConfigureAwait(false) when you calling send, this is just slightly faster... (but be aware of threads)
-                            await client.Send(data).ConfigureAwait(false);
+                            await client.SendAsync(data).ConfigureAwait(false);
+                            Interlocked.Add(ref totalSent, (ulong)data.Length);
                         }
 
                         //N.B. If the server does not send a packet, you can process message on your own straight ahead, it's just a ArraySegment<byte>!
@@ -66,7 +68,7 @@ namespace Miku.ClientTest
                                     $"[{index}] Packet data is not 100 bytes or the packet data length is " +
                                     $"not equal to the packet's header length, something went wrong with the packet!");
                             //here we just want to record the total bytes received
-                            Interlocked.Add(ref total, (ulong)pData.Count);
+                            Interlocked.Add(ref totalReceived, (ulong)pData.Count);
                         }
                         //OR YOU CAN USE WHILE LOOP ALTERNATIVELY:
                         /*
@@ -97,7 +99,7 @@ namespace Miku.ClientTest
             //hold the application
             while (true)
             {
-                Console.WriteLine($"All clients received {total} bytes altogether");
+                Console.WriteLine($"All clients received {totalReceived} bytes altogether, send {totalSent} bytes altogether");
                 Thread.Sleep(1000);
             }
         }

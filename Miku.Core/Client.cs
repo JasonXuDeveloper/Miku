@@ -40,6 +40,7 @@ namespace Miku.Core
         public Client(string ip, int port, int maxBufferSize = 30 * 1024)
         {
             Socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+            Socket.NoDelay = false;
             Socket.ReceiveTimeout = 1000 * 60 * 5;//5分钟没收到东西就算超时
             Ip = IPAddress.Parse(ip);
             Port = port;

@@ -96,7 +96,7 @@ namespace Miku.Core
                 while (!_isDispose && Socket.Connected)
                 {
                     //接受消息
-                    _receiveSize = await Socket.ReceiveAsync(_buffers, SocketFlags.None, default);
+                    _receiveSize = await Socket.ReceiveAsync(_buffers, SocketFlags.None, default).ConfigureAwait(false);
                     //判断接受的字节数
                     if (_receiveSize > 0)
                     {
@@ -138,9 +138,57 @@ namespace Miku.Core
         /// <summary>
         /// 发送消息方法
         /// </summary>
-        public async ValueTask<int> Send(ArraySegment<byte> buffer, bool usePacket = true)
+        public unsafe void Send(Span<byte> buffer, bool usePacket = true)
         {
-            int size = 0;
+            try
+            {
+                if (!_isDispose)
+                {
+                    if (usePacket)
+                    {
+                        Span<byte> b = stackalloc byte[buffer.Length + 4];
+                        Unsafe.As<byte, int>(ref b[0]) = buffer.Length;
+                        buffer.CopyTo(b.Slice(4, buffer.Length));
+                        Socket.Send(b, SocketFlags.None);
+                    }
+                    else
+                    {
+                        Socket.Send(buffer, SocketFlags.None);
+                    }
+                }
+            }
+            catch
+            {
+                Close("connection has been closed");
+            }
+        }
+
+        /// <summary>
+        /// 发送消息方法
+        /// </summary>
+        internal void Send(StreamBuffer buffer)
+        {
+            try
+            {
+                if (!_isDispose)
+                {
+                    //quick copy to ensure data is safe
+                    var buf = buffer.GetBuffer();
+                    Socket.Send(buf, SocketFlags.None);
+                    buffer.Reset();
+                }
+            }
+            catch
+            {
+                Close("connection has been closed");
+            }
+        }
+
+        /// <summary>
+        /// 发送消息方法
+        /// </summary>
+        public async ValueTask SendAsync(ArraySegment<byte> buffer, bool usePacket = true)
+        {
             try
             {
                 if (!_isDispose)
@@ -149,13 +197,14 @@ namespace Miku.Core
                     {
                         var b = ArrayPool<byte>.Shared.Rent(buffer.Count + 4);
                         Unsafe.As<byte, int>(ref b[0]) = buffer.Count;
-                        buffer.CopyTo(new ArraySegment<byte>(b, 4, buffer.Count));
-                        size = await Socket.SendAsync(new ArraySegment<byte>(b, 0, buffer.Count + 4), SocketFlags.None, default);
+                        buffer.CopyTo(b, 4);
+                        await Socket.SendAsync(new ArraySegment<byte>(b, 0, buffer.Count + 4), SocketFlags.None,
+                            default).ConfigureAwait(false);
                         ArrayPool<byte>.Shared.Return(b);
                     }
                     else
                     {
-                        size  = await Socket.SendAsync(buffer, SocketFlags.None, default);
+                        await Socket.SendAsync(buffer, SocketFlags.None, default).ConfigureAwait(false);
                     }
                 }
             }
@@ -163,8 +212,27 @@ namespace Miku.Core
             {
                 Close("connection has been closed");
             }
+        }
 
-            return size;
+        /// <summary>
+        /// 发送消息方法
+        /// </summary>
+        internal async ValueTask SendAsync(StreamBuffer buffer)
+        {
+            try
+            {
+                if (!_isDispose)
+                {
+                    //quick copy to ensure data is safe
+                    var buf = buffer.GetBuffer();
+                    await Socket.SendAsync(buf, SocketFlags.None, default).ConfigureAwait(false);
+                    buffer.Reset();
+                }
+            }
+            catch
+            {
+                Close("connection has been closed");
+            }
         }
     }
 }
