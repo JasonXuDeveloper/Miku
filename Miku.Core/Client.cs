@@ -4,6 +4,7 @@ using System.Buffers;
 using System.Net.Sockets;
 using System.Threading.Tasks;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 
 namespace Miku.Core
 {
@@ -191,10 +192,22 @@ namespace Miku.Core
                 {
                     if (usePacket)
                     {
-                        Span<byte> b = stackalloc byte[buffer.Length + 4];
-                        Unsafe.As<byte, int>(ref b[0]) = buffer.Length;
-                        buffer.CopyTo(b.Slice(4, buffer.Length));
-                        Socket.Send(b, SocketFlags.None);
+                        if (buffer.Length < 1024)
+                        {
+                            Span<byte> b = stackalloc byte[buffer.Length + 4];
+                            Unsafe.As<byte, int>(ref b[0]) = buffer.Length;
+                            buffer.CopyTo(b.Slice(4, buffer.Length));
+                            Socket.Send(b, SocketFlags.None);
+                        }
+                        else
+                        {
+                            var ptr = Marshal.AllocHGlobal(buffer.Length + 4);
+                            Span<byte> b = new Span<byte>((byte*)ptr, buffer.Length + 4);
+                            Unsafe.As<byte, int>(ref b[0]) = buffer.Length;
+                            buffer.CopyTo(b.Slice(4, buffer.Length));
+                            Socket.Send(b, SocketFlags.None);
+                            Marshal.FreeHGlobal(ptr);
+                        }
                     }
                     else
                     {

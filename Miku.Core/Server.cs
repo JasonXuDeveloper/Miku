@@ -182,14 +182,10 @@ namespace Miku.Core
             {
                 while (IsRunning)
                 {
-                    for (int i = 0; i < 10; i++)
-                    {
-                        GC.Collect(0, GCCollectionMode.Forced);
-                        GC.Collect(1, GCCollectionMode.Forced);
-                        GC.Collect(2, GCCollectionMode.Forced);
-                    }
-
-                    Thread.Sleep(10000);
+                    GC.Collect(0, GCCollectionMode.Forced);
+                    GC.Collect(1, GCCollectionMode.Forced);
+                    GC.Collect(2, GCCollectionMode.Forced);
+                    Thread.Sleep(30000);
                 }
             }).Start();
         }
