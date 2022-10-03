@@ -12,6 +12,7 @@ namespace Miku.ServerTest
             //total byte received from clients
             ulong totalReceived = 0;
             ulong totalSent = 0;
+            var encryptKey = new byte[] { 0x01, 0x02, 0x03, 0x04 };
             //all clients connected
             List<uint> clients = new List<uint>();
             //server application
@@ -19,7 +20,7 @@ namespace Miku.ServerTest
             //use packet (this is true by default)
             server.UsePacket = true;
             //set max buffer length (30KB by default) for each client
-            server.MaxBufferSize = 1024 * 60;
+            server.MaxBufferSize = 1024 * 10;
             //on connect callback
             server.OnConnect += id =>
             {
@@ -40,6 +41,14 @@ namespace Miku.ServerTest
                 {
                     //GET THE ACTUAL DATA FROM THE PACKET
                     var data = p.Data;
+                    //IF THE CLIENT APPLIED XOR BEFORE SENDING THE MESSAGE, WE NEED TO APPLY XOR AGAIN HERE TO DECRYPT
+                    //you can use extension method, or to call the MessageTool.ApplyXor method directly (you need to provide a key, make sure encrypt key and decrypt key are the same!)
+                    MessageTool.ApplyXor(data, encryptKey);
+                    // data.ApplyXor(new byte[] { 0x01, 0x02, 0x03, 0x04 });//Extension method approach
+                    
+                    //now data is the decrypted data, we want to encrypt it to broadcast
+                    data.ApplyXor(encryptKey);
+
                     //we want to record how much we received in this test
                     Interlocked.Add(ref totalReceived, (ulong)data.Count);
                     //and we want to broadcast to all clients we had
@@ -47,22 +56,22 @@ namespace Miku.ServerTest
                     for (int i = 0; i < cnt; i++)
                     {
                         if (i >= clients.Count) break;
-                        uint cid = clients[i];
-                        //broadcast the received data to all clients (will automatically convert data to packet if you enabled server.UsePacket)
-                        //because we if we blocked the current thread in this callback, it will also block the receive operation (because receive runs on the same thread as the callback thread)
-                        //therefore it is recommend to enable merge to send as it would be faster if you send stuffs more than 2000 times per millisecond,
-                        //or alternatively you can use send on other threads (but the concurrency is still concerning)
-                        //you can send using async (but if you call this too often in one thread, it will still block the current thread, and if you block the callback thread, it will also block the receive operation)
-                        // _ = server.SendToClientAsync(cid, data, true);//use await keyword in async context
-                        //or sync
-                        server.SendToClient(cid, data, true);//if you enable merge to send for the sync method, it might actually become async method
-                        Interlocked.Add(ref totalSent, (ulong)data.Count);
-
-                        //send to client has 3 arguments: id, data, and merge to send (this is default as false)
-                        //merge the data that needs to send to each client, and send them each ms
-                        //only recommend to set this to true when using cluster and need to redirect the message to a central server (as it will be more efficient to the cpu);
-                        //or when you need to send data very frequent that will legit block the thread for ages, you can consider to enable merge send
-                        //if you only want to send to a remote client, it is not recommend to merge send as it will consume more time to send the message
+                        try
+                        {
+                            uint cid = clients[i];
+                            //broadcast the received data to all clients (will automatically convert data to packet if you enabled server.UsePacket)
+                            //send to client has 2 arguments: id, data
+                            //because we if we blocked the current thread in this callback, it will also block the receive operation (because receive runs on the same thread as the callback thread)
+                            //you can send using async (but if you call this too often in one thread, it will still block the current thread, and if you block the callback thread, it will also block the receive operation)
+                            // _ = server.SendToClientAsync(cid, data);//use await keyword in async context
+                            //or sync
+                            server.SendToClient(cid, data);
+                            Interlocked.Add(ref totalSent, (ulong)data.Count);
+                        }
+                        catch
+                        {
+                            //ignore
+                        }
                     }
                 }
                 //OR YOU CAN USE WHILE LOOP ALTERNATIVELY:

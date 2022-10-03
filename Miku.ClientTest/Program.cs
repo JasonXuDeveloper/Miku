@@ -11,7 +11,7 @@ namespace Miku.ClientTest
         public static void Main(string[] args)
         {
             //number of clients to create
-            int testCount = 1000;
+            int testCount = 100;
             //total number of bytes received across all clients
             ulong totalReceived = 0;
             ulong totalSent = 0;
@@ -20,18 +20,29 @@ namespace Miku.ClientTest
             int port = 1333;
             //test message
             StringBuilder sb = new StringBuilder();
-            sb.Append('1', 100);
+            sb.Append('1', 30);
             var str = sb.ToString();
-            var data = Encoding.Default.GetBytes(str);
-
+            var originalData = Encoding.Default.GetBytes(str);
+            Console.WriteLine($"original data: {string.Join(",",originalData)}");
+            var encryptedData = Encoding.Default.GetBytes(str);
+            var encryptKey = new byte[] { 0x01, 0x02, 0x03, 0x04 };
+            //WE MIGHT WISH TO ENCRYPT THE DATA TO SEND, IN THIS TEST WE WILL APPLY XOR TO PROTECT OUR MESSAGE
+            //you can use extension method, or to call the MessageTool.ApplyXor method directly (you need to provide a key, make sure encrypt key and decrypt key are the same!)
+            MessageTool.ApplyXor(encryptedData, encryptKey);
+            // data.ApplyXor(new byte[] { 0x01, 0x02, 0x03, 0x04 });//Extension method approach
+            //N.B. here we are repeating the same message to all clients, therefore we only need to apply xor to encrypt the message once
+            Console.WriteLine($"encrypted data: {string.Join(",",encryptedData)}");
+            
             //create clients
             for (int i = 1; i <= testCount; i++)
             {
                 try
                 {
                     int index = i;
-                    //create client, and optionally set max buffer size (for receive, by default this is 30KB, here we defined it as 50KB)
-                    Client client = new Client(ip, port, 1024 * 50);
+                    //create client, and optionally set max buffer size (for receive, by default this is 30KB)
+                    Client client = new Client(ip, port, 1024 * 30);
+                    //use packet (this is true by default)
+                    client.UsePacket = true;
                     //on connect callback
                     client.OnConnected += async () =>
                     {
@@ -42,11 +53,9 @@ namespace Miku.ClientTest
                             //wait for 1s (with some gaps)
                             await Task.Delay(1000).ConfigureAwait(false);
                             //send message calling client.Send(message, usePacket)
-                            //usePacket is true by default (recommended), if you don't want to use it, pass the second argument as false
-                            //if usePacket is true, please ensure the onMessage callback in your serverside has parsed packets
                             //you dont have to use ConfigureAwait(false) when you calling send, this is just slightly faster... (but be aware of threads)
-                            await client.SendAsync(data).ConfigureAwait(false);
-                            Interlocked.Add(ref totalSent, (ulong)data.Length);
+                            await client.SendAsync(encryptedData).ConfigureAwait(false);
+                            Interlocked.Add(ref totalSent, (ulong)encryptedData.Length);
                         }
 
                         //N.B. If the server does not send a packet, you can process message on your own straight ahead, it's just a ArraySegment<byte>!
@@ -60,13 +69,20 @@ namespace Miku.ClientTest
                         //WE CAN USE FOREACH TO RETRIEVE ALL PACKETS FROM ANY PACKET (AS PACKETS ARE IN CHAIN)
                         foreach (var p in packet)
                         {
+                            //IF THE SERVER APPLIED XOR BEFORE SENDING THE MESSAGE, WE NEED TO APPLY XOR AGAIN HERE TO DECRYPT
+                            //you can use extension method, or to call the MessageTool.ApplyXor method directly (you need to provide a key, make sure encrypt key and decrypt key are the same!)
+                            MessageTool.ApplyXor(p.Data, encryptKey);
+                            // p.Data.ApplyXor(encryptKey);//Extension method approach
+                            
                             //GET DATA INSIDE THE PACKET
                             var pData = p.Data;
+                            
                             //here we want to see whether or not the packet feature is accurate
-                            if (p.Length != 100 || p.Length != pData.Count)
+                            if (p.Length != encryptedData.Length || p.Length != pData.Count || !pData.AsSpan().SequenceEqual(originalData))
                                 Console.WriteLine(
                                     $"[{index}] Packet data is not 100 bytes or the packet data length is " +
-                                    $"not equal to the packet's header length, something went wrong with the packet!");
+                                    $"not equal to the packet's header length, something went wrong with the packet!\n" +
+                                    $"received {pData.Count} bytes: {string.Join(",", pData)}");
                             //here we just want to record the total bytes received
                             Interlocked.Add(ref totalReceived, (ulong)pData.Count);
                         }

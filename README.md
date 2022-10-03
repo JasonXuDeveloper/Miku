@@ -16,10 +16,9 @@ High performance TCP server/client library
 | Application of ArrayPool to control memory allocation        | Sep 29, 2022   |
 | Application of async to ensure concurrencing                 | Sep 29, 2022   |
 | Thread safe process and callbacks                            | Sep 29, 2022   |
-| Merge data then send (optional, reduce cpu usage, useful for clusters to redirect to central server) | Sep 29, 2022   |
 | Check TCP status and disconnect when unavaliable             | Sep 29, 2022   |
 | Packet (optional, ensure reading the correct length of data) | Sep 30, 2022   |
-| Encryption (optional, xor)                                   | N/A            |
+| Encryption (optional, xor)                                   | Oct 3, 2022    |
 | Compression (optional, zlib)                                 | N/A            |
 
 
@@ -28,9 +27,9 @@ High performance TCP server/client library
 
 ## Test
 
-I've provided a test that each client sends 100 bytes to the server per second, and the server broadcast each message from each client to all clients.
+I've provided a test that each client sends 30 bytes to the server per second, and the server broadcast each message from each client to all clients.
 
-Suppose we have 1000 clients, then each client would send 100 bytes per second, and receive ```1000(number of clients who sent a message per second)*100(size of the message)``` bytes per second. The server would send ```1000(number of message received from clients per second)*1000(number of clients who needs to receive those messages)*100(size of the message)``` bytes per second, and receive ```1000(number of clients)*100(size of the message)``` bytes per second.
+Suppose we have 100 clients, then each client would send 30 bytes per second, and receive ```100(number of clients who sent a message per second)*30(size of the message)``` bytes per second. The server would send ```100(number of message received from clients per second)*100(number of clients who needs to receive those messages)*30(size of the message)``` bytes per second, and receive ```100(number of clients)*30(size of the message)``` bytes per second.
 
 > Both server and client test enables packet, which allocates extra 4 bytes per message as a header indicates the length of the message
 
@@ -42,7 +41,7 @@ Please run this first to start the server
 
 Please run this after starting the server, and it should connect to the server automatically and start sending and receiving messages
 
-> You can also change the testCount in ```Program.cs```, by default there would be 1000 clients
+> You can also change the testCount in ```Program.cs```, by default there would be 100 clients
 
 
 
@@ -56,22 +55,29 @@ TODO
 
 I personally don't recommend testing over 2000 clients broadcasting, as it will allocate an extremely large amount of memory (the allocation will grow exponentially due to the natural of broadcast).
 
-Suppose 2000 clients send to the server a 100 bytes message in one second, then the server needs to send each client ```2000*100``` bytes simutaneously, that means each client connection will allocate an almost ```200KB``` buffer to be able to send the message on time, and as we have 2000 clients, we need around ```2000*200KB``` allocated memory, which is about ```400MB``` of memory! And the more clients, the more memory we need to allocate (and this will definitly grow exponentially).
+Suppose 2000 clients send to the server a 30 bytes message in one second, then the server needs to send each client ```2000*30``` bytes simutaneously, that means each client connection will allocate an almost ```60KB``` buffer to be able to send the message on time, and as we have 2000 clients, we need around ```2000*60KB``` allocated memory, which is about ```120MB``` of memory (in reality, way more than this!!!). And the more clients, the more memory we need to allocate (and this will definitly grow exponentially).
 
-And the current send buffer strategy would gather a double sized memory each time it is full, throughout my test, running 2000 clients broadcasting will accuire 416MB of memory as an average (at peak maybe 260MB) to be able to broadcast instantly, but 3000 clients will continually grow the allocation of memory (memory leak).
+Throughout my test, broadcasting over 3000 clients (although I don't think anyone needs to broadcast that much clients that often with 30 bytes in a single program) will continually grow the allocation of memory (memory leak).
 
-Let's see the statistics for the provided test: ```n``` number of clients sending 100 bytes to the server per second, and the server broadcast all messages to all clients:
+Let's see the statistics for the provided test: ```n``` number of clients sending 30 bytes to the server per second, and the server broadcast all messages to all clients:
 
-| Number of clients connected (```n```) | Memory Allocated by Server (MergeSend = true) (Avg) |
-| ------------------------------------- | --------------------------------------------------- |
-| 1000                                  | 175MB                                               |
-| 2000                                  | 455MB                                               |
+> The memory allocated is how much memory the server program allocated after 10 minutes of running
 
-> If you changed the size of message to 30 bytes, I would guarantee you can broatcast it to at least 4000 clients with no memory leak (please let me know if I'm wrong tho).
+| Number of clients connected (```n```) | Memory Allocated |
+| ------------------------------------- | ---------------- |
+| 100                                   | 13.8MB           |
+| 200                                   | 14.6MB           |
+| 500                                   | 17.5MB           |
+| 1000                                  | 21.1MB           |
+| 2000 (don't recommend)                | 526.4MB          |
+
+> Since 2000 clients, there is a memory leak (not Miku's fault). It is C#'s implementation on ```Socket.Send```'s fault. As it will keep adding the segment to ```ConcurrentQueueSegment``` with the ```SocketIOEvent```. The reason of it is because we are broadcasting too often, as each client sends a message, the server will broadcast it 2000 times, and we have 2000 clients sending this per second, which means the server needs to broadcast 2000*2000 times per second, and this is why the low level C# code causes a memory leak.
 >
-> And if you don't need to broadcast to that many clients each second, you can run much more clients as there would not be any memory pressure (because the low level code of this project clears the send buffer each millisecond).
+> If you don't need to broadcast to that many clients each second, you can run much more clients as there would not be any memory pressure (because the low level code of this project clears the send buffer each millisecond).
 >
 > So reduce the size of message and reduce the frequency of broadcast, or even reduce the number of clients to broadcast, can significantly increase the concurrency level (number of clients connected at the same time) and improve the memory allocation.
+>
+> Or if you have to send message very frequent, try combine them then send. (i.e. combine the messages received from different clients per millisecond, and send them all in once), this will significantly reduce the total sending number per millisecond, and can solve the memory leak occured in this test.
 >
 > **Remember, this test is an extreme pressure test, tradiationally standard application would not need to broadcast to thousands of clients per second**
 

@@ -4,7 +4,6 @@ using System.Linq;
 using System.Threading;
 using System.Net.Sockets;
 using System.Threading.Tasks;
-using System.Collections.Generic;
 using System.Collections.Concurrent;
 using System.Runtime.InteropServices;
 
@@ -25,7 +24,12 @@ namespace Miku.Core
         public int MaxBufferSize = 30 * 1024;
 
         #endregion
-        
+
+        /// <summary>
+        /// 获取绑定终结点
+        /// </summary>
+        public IPEndPoint Ip => _ip;
+
         /// <summary>
         /// 监听地址
         /// </summary>
@@ -44,40 +48,29 @@ namespace Miku.Core
         /// <summary>
         /// 客户端
         /// </summary>
-        private readonly ConcurrentDictionary<ulong, ClientBase> _clients =
-            new ConcurrentDictionary<ulong, ClientBase>();
-        
-        /// <summary>
-        /// 每个客户端的发送流
-        /// </summary>
-        private readonly ConcurrentDictionary<uint,StreamBuffer> _clientBuffers =
-            new ConcurrentDictionary<uint, StreamBuffer>();
+        private readonly ConcurrentDictionary<ulong, Client> _clients =
+            new ConcurrentDictionary<ulong, Client>();
 
         /// <summary>
         /// 专门用来启动标记的客户端
         /// </summary>
-        private readonly ConcurrentQueue<ClientBase> _clientsToStart = new ConcurrentQueue<ClientBase>();
-
-        /// <summary>
-        /// 客户端id列表
-        /// </summary>
-        private readonly List<uint> _ids = new List<uint>(100);
+        private readonly ConcurrentQueue<Client> _clientsToStart = new ConcurrentQueue<Client>();
 
         /// <summary>
         /// 客户端连接回调
         /// </summary>
         public event Action<uint> OnConnect;
-        
+
         /// <summary>
         /// 客户端发来消息回调
         /// </summary>
         public event Action<uint, ArraySegment<byte>> OnMessage;
-        
+
         /// <summary>
         /// 客户端断开回调
         /// </summary>
         public event Action<uint, string> OnDisconnect;
-        
+
         /// <summary>
         /// 是否在运行
         /// </summary>
@@ -88,7 +81,7 @@ namespace Miku.Core
         /// </summary>
         /// <param name="id"></param>
         /// <returns></returns>
-        private ClientBase GetClient(uint id)
+        private Client GetClient(uint id)
         {
             if (_clients.TryGetValue(id, out var client))
             {
@@ -124,7 +117,7 @@ namespace Miku.Core
         /// <param name="id"></param>
         public void KickClient(uint id)
         {
-            if(!_clients.ContainsKey(id))return;
+            if (!_clients.ContainsKey(id)) return;
             _clients[id].Close("server kicked this client");
         }
 
@@ -133,79 +126,21 @@ namespace Miku.Core
         /// </summary>
         /// <param name="id"></param>
         /// <param name="message"></param>
-        /// <param name="mergeSend"></param>
-        public void SendToClient(uint id, Span<byte> message, bool mergeSend = false)
+        public void SendToClient(uint id, Span<byte> message)
         {
-            if(!_clients.TryGetValue(id, out var client))return;
-            if (!mergeSend)
-            {
-                client.Send(message, UsePacket);
-                return;
-            }
-            //合并消息的流
-            if (!_clientBuffers.TryGetValue(id, out var streamBuffer)) return;
-            //确保流够长
-            if (streamBuffer.Length >= message.Length)
-            {
-                byte failed = 10;
-                //记录消息内容
-                while (!streamBuffer.Write(message, UsePacket) && failed-- > 0)
-                {
-                    client.Send(streamBuffer);
-                }
-                //失败直接发，不管buffer了
-                if(failed == 0)
-                { 
-                    client.Send(message, UsePacket);
-                }
-            }
-            //这个就是太长了，那就直接发
-            else
-            {
-                //这里需要确保发送顺序
-                _ = client.SendAsync(streamBuffer).ConfigureAwait(false);
-                client.Send(message, UsePacket);
-            }
+            if (!_clients.TryGetValue(id, out var client)) return;
+            client.Send(message);
         }
-        
+
         /// <summary>
         /// 给客户端发消息
         /// </summary>
         /// <param name="id"></param>
         /// <param name="message"></param>
-        /// <param name="mergeSend"></param>
-        public async ValueTask SendToClientAsync(uint id, ArraySegment<byte> message, bool mergeSend = false)
+        public async ValueTask SendToClientAsync(uint id, ArraySegment<byte> message)
         {
             if (!_clients.TryGetValue(id, out var client)) return;
-            if (!mergeSend)
-            {
-                await client.SendAsync(message, UsePacket).ConfigureAwait(false);
-                return;
-            }
-            //合并消息的流
-            if (!_clientBuffers.TryGetValue(id, out var streamBuffer)) return;
-            //确保流够长
-            if (streamBuffer.Length >= message.Count)
-            {
-                byte failed = 10;
-                //记录消息内容
-                while (!streamBuffer.Write(message, UsePacket) && failed-- > 0)
-                {
-                    await client.SendAsync(streamBuffer).ConfigureAwait(false);
-                }
-                //失败直接发，不管buffer了
-                if(failed == 0)
-                {
-                    await client.SendAsync(message, UsePacket).ConfigureAwait(false);
-                }
-            }
-            //这个就是太长了，那就直接发
-            else
-            {
-                //这里需要确保发送顺序
-                _ = client.SendAsync(streamBuffer).ConfigureAwait(false);
-                await client.SendAsync(message, UsePacket).ConfigureAwait(false);
-            }
+            await client.SendAsync(message);
         }
 
         /// <summary>
@@ -240,8 +175,6 @@ namespace Miku.Core
             new Thread(AcceptAsync).Start();
             //单独一个线程检测客户端是否在线
             new Thread(CheckStatus).Start();
-            //单独一个线程派发
-            new Thread(SendMessage).Start();
             //单独一个线程启动客户端
             new Thread(StartClients).Start();
             //单独一个线程处理GC
@@ -255,6 +188,7 @@ namespace Miku.Core
                         GC.Collect(1, GCCollectionMode.Forced);
                         GC.Collect(2, GCCollectionMode.Forced);
                     }
+
                     Thread.Sleep(10000);
                 }
             }).Start();
@@ -279,7 +213,7 @@ namespace Miku.Core
                 }
             }
         }
-        
+
         /// <summary>
         /// 循环启动客户端
         /// </summary>
@@ -292,49 +226,11 @@ namespace Miku.Core
                 {
                     if (_clientsToStart.TryDequeue(out var client))
                     {
-                        ((Client)client).Start();
+                        client.Start();
                     }
                 }
 
                 Thread.Sleep(1);
-            }
-        }
-        
-        /// <summary>
-        /// 循环发消息给客户端
-        /// </summary>
-        private void SendMessage()
-        {
-            while (IsRunning)
-            {
-                lock (_ids)
-                {
-                    var cnt = _ids.Count;
-                    for (int i = 0; i < cnt; i++)
-                    {
-                        if(i >= _ids.Count) continue;
-                        var id = _ids[i];
-                        SendToClient(id);
-                    }
-                }
-                //每1ms 检查一次
-                Thread.Sleep(1);
-            }
-        }
-
-        /// <summary>
-        /// 发给客户端消息
-        /// </summary>
-        /// <param name="id"></param>
-        private void SendToClient(uint id)
-        {
-            var client = GetClient(id);
-            if (client != null && client.Socket.Connected)
-            {
-                //获取需要发的消息
-                var streamBuffer = _clientBuffers[id];
-                if (!streamBuffer.Valid) return;
-                _ = _clients[id].SendAsync(streamBuffer).ConfigureAwait(false);
             }
         }
 
@@ -342,7 +238,7 @@ namespace Miku.Core
         /// 当前连接的客户端id
         /// </summary>
         private uint _curId;
-        
+
         /// <summary>
         /// 异步接收
         /// </summary>
@@ -357,28 +253,13 @@ namespace Miku.Core
                     Interlocked.Increment(ref _curId);
                     var id = _curId;
                     var client = new Client(socket, MaxBufferSize);
-                    client.Socket.ReceiveTimeout = 1000 * 60 * 5;//5分钟没收到东西就算超时
+                    client.Socket.ReceiveTimeout = 1000 * 60 * 5; //5分钟没收到东西就算超时
+                    client.UsePacket = UsePacket;//是否处理粘包
                     if (_clients.TryAdd(id, client))
                     {
-                        if (!_clientBuffers.TryGetValue(id, out var streamBuffer))
-                        {
-                            _clientBuffers.TryAdd(id, new StreamBuffer());
-                        }
-                        streamBuffer?.Reset();
-                        lock (_ids)
-                        {
-                            _ids.Add(id);
-                        }
-                        client.OnReceived += arr =>
-                        {
-                            OnMessage?.Invoke(id, arr);
-                        };
+                        client.OnReceived += arr => { OnMessage?.Invoke(id, arr); };
                         client.OnClose += msg =>
                         {
-                            lock (_ids)
-                            {
-                                _ids.Remove(id);
-                            }
                             _clients.TryRemove(id, out _);
                             OnDisconnect?.Invoke(id, msg);
                         };
@@ -436,10 +317,5 @@ namespace Miku.Core
                 }
             }
         }
-
-        /// <summary>
-        /// 获取绑定终结点
-        /// </summary>
-        public IPEndPoint Ip => _ip;
     }
 }

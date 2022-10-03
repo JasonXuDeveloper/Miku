@@ -23,11 +23,7 @@ namespace Miku.Core
         /// </summary>
         public ArraySegment<byte> Data //I was going to store span here but realised you can not use it in async methods, but you can use arraysegment lol
         {
-            get
-            {
-                //TODO XOR injection
-                return _buffer.Slice(4, Length);
-            }
+            get => _buffer.Slice(4, Length);
         }
 
         /// <summary>
@@ -38,19 +34,7 @@ namespace Miku.Core
         /// <summary>
         /// Get the next packet
         /// </summary>
-        public Packet NextPacket
-        {
-            get
-            {
-                var totalLen = 4 + Length;
-                if (_buffer.Count < totalLen + 4)//whether or not it has enough space to get the header
-                {
-                    return new Packet(Array.Empty<byte>());
-                }
-
-                return new Packet(_buffer.Slice(totalLen));
-            }
-        }
+        public Packet NextPacket => new Packet(_buffer.Slice(Length + 4));
 
         /// <summary>
         /// Parse a received message to packet
