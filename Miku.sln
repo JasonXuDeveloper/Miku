@@ -2,10 +2,6 @@
 Microsoft Visual Studio Solution File, Format Version 12.00
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Miku.Core", "Miku.Core\Miku.Core.csproj", "{3B44C849-FF4C-4896-9860-1B0D16798190}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Miku.ClientTest", "Miku.ClientTest\Miku.ClientTest.csproj", "{1B727DCA-6B84-4215-9C2E-19233645183B}"
-EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Miku.ServerTest", "Miku.ServerTest\Miku.ServerTest.csproj", "{B4ADBC8A-8352-4B18-B346-6E63783C0342}"
-EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -16,13 +12,5 @@ Global
 		{3B44C849-FF4C-4896-9860-1B0D16798190}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{3B44C849-FF4C-4896-9860-1B0D16798190}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{3B44C849-FF4C-4896-9860-1B0D16798190}.Release|Any CPU.Build.0 = Release|Any CPU
-		{1B727DCA-6B84-4215-9C2E-19233645183B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{1B727DCA-6B84-4215-9C2E-19233645183B}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{1B727DCA-6B84-4215-9C2E-19233645183B}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{1B727DCA-6B84-4215-9C2E-19233645183B}.Release|Any CPU.Build.0 = Release|Any CPU
-		{B4ADBC8A-8352-4B18-B346-6E63783C0342}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{B4ADBC8A-8352-4B18-B346-6E63783C0342}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{B4ADBC8A-8352-4B18-B346-6E63783C0342}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{B4ADBC8A-8352-4B18-B346-6E63783C0342}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal
