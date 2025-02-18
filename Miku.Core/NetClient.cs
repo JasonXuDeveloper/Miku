@@ -32,6 +32,11 @@ namespace Miku.Core
         public event Action<Exception> OnError;
 
         /// <summary>
+        /// Unique identifier for the client
+        /// </summary>
+        public Guid Id { get; } = Guid.NewGuid();
+
+        /// <summary>
         /// Whether the client is connected
         /// </summary>
         public bool IsConnected => _isConnected;
@@ -157,7 +162,14 @@ namespace Miku.Core
                 _tempSendBuffer = null;
             }
 
-            OnDisconnected?.Invoke();
+            try
+            {
+                OnDisconnected?.Invoke();
+            }
+            catch (Exception e)
+            {
+                OnError?.Invoke(e);
+            }
         }
 
         /// <summary>
