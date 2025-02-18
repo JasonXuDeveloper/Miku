@@ -216,6 +216,7 @@ namespace Miku.Core
                     // return buffer
                     ArrayPool<byte>.Shared.Return(client._tempSendBuffer!);
                     client._tempSendBuffer = null;
+                    args.SetBuffer(null, 0, 0);
                     // reset sending flag
                     Interlocked.Exchange(ref client._sending, 0);
 
@@ -307,6 +308,8 @@ namespace Miku.Core
                         {
                             client.OnError?.Invoke(e);
                         }
+                        
+                        processedData = client._receivedData.WrittenMemory;
                     }
                 }
                 catch (Exception e)
