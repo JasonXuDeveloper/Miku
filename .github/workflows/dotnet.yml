@@ -1,0 +1,155 @@
+name: Code Check and Release
+
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: 6.0.x
+    - name: Restore dependencies
+      run: dotnet restore
+    - name: Build
+      run: dotnet build --no-restore
+    - name: Test
+      run: dotnet test --no-build --verbosity normal
+  
+  bump-version:
+    runs-on: ubuntu-latest
+    if: ${{ startsWith(github.event.head_commit.message, 'release v') }}
+    needs: [ build ]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0   # Ensures that we have access to the full commit history
+
+      - name: Extract Version and Description
+        id: extract_version_description
+        run: |
+          FULL_MESSAGE="${{ github.event.head_commit.message }}"
+
+          SUMMARY=$(echo "$FULL_MESSAGE" | head -n 1)
+          DESCRIPTION=$(echo "$FULL_MESSAGE" | tail -n +3)
+
+          if [[ $SUMMARY =~ ^release\ v([0-9]+\.[0-9]+\.[0-9]+) ]]; then
+            VERSION="${BASH_REMATCH[1]}"
+          else
+            echo "Commit message does not match the pattern 'release vx.x.x'"
+            exit 1
+          fi
+
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+          printf "DESCRIPTION<<EOF\n%s\nEOF\n" "$DESCRIPTION" >> $GITHUB_ENV
+
+          echo "Bumping version to $VERSION"
+
+      - name: Run Version Bump Script
+        run: |
+          echo "Current directory: $(pwd)"
+          NEW_VERSION=$VERSION
+          
+          # Bump the version number in Miku.Core/Miku.Core.csproj files
+          PROJS=$(find Miku.Core -name '*.csproj')
+          
+          for PROJ in $PROJS; do
+            # <Version>ver</Version>
+            OLD_VERSION=$(sed -n 's/.*<Version>\([^<]*\)<\/Version>.*/\1/p' $PROJ)
+            
+            if [ -z "$OLD_VERSION" ]; then
+              echo "Failed to find Version in $PROJ"
+              exit 1
+            fi
+            
+            echo "Bumping Version number in $PROJ from $OLD_VERSION to $NEW_VERSION"
+            
+            if [[ "$OSTYPE" == "darwin"* ]]; then
+              # macOS
+              sed -i "" "s/<Version>$OLD_VERSION<\/Version>/<Version>$NEW_VERSION<\/Version>/" $PROJ
+            else
+              # Linux
+              sed -i "s/<Version>$OLD_VERSION<\/Version>/<Version>$NEW_VERSION<\/Version>/" $PROJ
+            fi
+          done
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Check for Changes
+        id: check_changes
+        run: |
+          # Check if there are any changes to commit
+          if [[ -n "$(git status --porcelain)" ]]; then
+            echo "changes=true" >> $GITHUB_ENV
+          else
+            echo "changes=false" >> $GITHUB_ENV
+          fi
+
+      - name: Commit and Push Changes
+        id: commit_version_bump  # Capture this step ID to get the commit SHA
+        if: env.changes == 'true'
+        run: |
+          # Commit the changes with the specified message
+          git add .
+          git commit -m "Bump to v$VERSION"
+
+          # Push changes back to master branch
+          git push origin master
+        env:
+          VERSION: ${{ env.VERSION }}
+
+      - name: Get Commit SHA
+        run: echo "COMMIT_SHA=$(git rev-parse HEAD)" >> $GITHUB_ENV
+
+      - name: Create GitHub Release
+        id: create_release  # Capture the release ID for uploading assets
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: "v${{ env.VERSION }}"                  # Release tag, like "v1.2.3"
+          commitish: "${{ env.COMMIT_SHA }}"     # Ensures the release points to the bump commit
+          release_name: "v${{ env.VERSION }}"              # Title of the release, same as the tag
+          body: "${{ env.DESCRIPTION }}"                   # Release notes from commit message
+          draft: false                                     # Make the release public immediately
+          prerelease: false                                # Mark it as a stable release
+      
+      # Set up .NET Core
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 6.0.x
+
+      # Restore dependencies
+      - name: Restore dependencies
+        run: dotnet restore
+
+      # Build the solution
+      - name: Build solution
+        run: dotnet build --configuration Release
+
+      # Build the solution
+      - name: Build solution
+        run: dotnet build --configuration Release /p:OutputPath=../artifacts
+
+      # Push NuGet packages
+      - name: Push NuGet Packages
+        run: |
+          echo "Current directory: $(pwd)"
+          for package in ./artifacts/*.nupkg; do
+            dotnet nuget push "$package" --api-key ${{ secrets.MYTOKEN }} --source https://api.nuget.org/v3/index.json
+          done
