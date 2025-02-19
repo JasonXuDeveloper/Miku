@@ -5,7 +5,27 @@
         <ImplicitUsings>disable</ImplicitUsings>
         <Nullable>disable</Nullable>
         <LangVersion>9</LangVersion>
-        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+        <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+        <Version>0.0.0</Version>
+        <PackageId>Miku</PackageId>
+        <Title>Miku</Title>
+        <Authors>JasonXuDeveloper</Authors>
+        <Description>High performance TCP server/client library written in C#</Description>
+        <Copyright>JasonXuDeveloper</Copyright>
+        <PackageProjectUrl>https://github.com/JasonXuDeveloper/Miku</PackageProjectUrl>
+        <RepositoryUrl>https://github.com/JasonXuDeveloper/Miku</RepositoryUrl>
+        <RepositoryType>git</RepositoryType>
+        <PackageTags>ECS</PackageTags>
+        <PackageLicenseExpression>MIT</PackageLicenseExpression>
+        <PackageReadmeFile>README.md</PackageReadmeFile>
+        <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+        <BranchName>refs/heads/main</BranchName>
+        <PublishRepositoryUrl>true</PublishRepositoryUrl>
+        <EmbedUntrackedSources>true</EmbedUntrackedSources>
     </PropertyGroup>
+
+    <ItemGroup>
+        <None Include="..\README.md" Pack="true" PackagePath="\"/>
+    </ItemGroup>
 
 </Project>
