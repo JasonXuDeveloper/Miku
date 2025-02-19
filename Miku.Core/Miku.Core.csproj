@@ -1,7 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
-        <TargetFramework>net6.0</TargetFramework>
         <ImplicitUsings>disable</ImplicitUsings>
         <Nullable>disable</Nullable>
         <LangVersion>9</LangVersion>
@@ -22,6 +21,7 @@
         <BranchName>refs/heads/main</BranchName>
         <PublishRepositoryUrl>true</PublishRepositoryUrl>
         <EmbedUntrackedSources>true</EmbedUntrackedSources>
+        <TargetFrameworks>net6.0;net5.0;net7.0;net8.0;net9.0;netstandard2.1</TargetFrameworks>
     </PropertyGroup>
 
     <ItemGroup>
