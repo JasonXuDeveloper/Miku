@@ -107,8 +107,8 @@ jobs:
           git add .
           git commit -m "Bump to v$VERSION"
 
-          # Push changes back to master branch
-          git push origin master
+          # Push changes back to main branch
+          git push origin main
         env:
           VERSION: ${{ env.VERSION }}
 
