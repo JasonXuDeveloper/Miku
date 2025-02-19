@@ -274,6 +274,8 @@ namespace Miku.Core
 
                     // process through middlewares, reverse order
                     ReadOnlyMemory<byte> processedData = client._receivedData.WrittenMemory;
+                    // temp stack memory
+                    Span<byte> tempStackMem = stackalloc byte[1024];
                     // repeat until all data is processed
                     while (!processedData.IsEmpty)
                     {
@@ -321,13 +323,23 @@ namespace Miku.Core
 
                         // get left over data
                         int leftOver = client._receivedData.WrittenCount - index;
-                        if (leftOver > 0)
+                        if (leftOver > 0 && index < client._receivedData.WrittenCount && index > 0)
                         {
-                            byte[] temp = ArrayPool<byte>.Shared.Rent(leftOver);
-                            client._receivedData.WrittenMemory.Slice(index).CopyTo(temp);
-                            client._receivedData.Clear();
-                            client._receivedData.Write(temp.AsSpan(0, leftOver));
-                            ArrayPool<byte>.Shared.Return(temp);
+                            // copy left over data to temp stack memory - faster than array pool
+                            if (leftOver <=1024)
+                            {
+                                client._receivedData.WrittenSpan.Slice(index).CopyTo(tempStackMem);
+                                client._receivedData.Clear();
+                                client._receivedData.Write(tempStackMem.Slice(0, leftOver));
+                            }
+                            else
+                            {
+                                byte[] temp = ArrayPool<byte>.Shared.Rent(leftOver);
+                                client._receivedData.WrittenMemory.Slice(index).CopyTo(temp);
+                                client._receivedData.Clear();
+                                client._receivedData.Write(temp.AsSpan(0, leftOver));
+                                ArrayPool<byte>.Shared.Return(temp);
+                            }
                         }
                         else
                         {

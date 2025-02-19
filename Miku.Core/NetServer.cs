@@ -145,7 +145,8 @@ namespace Miku.Core
                 client.OnError += OnError;
                 client.Connect(acceptedSocket);
             }
-            else
+            // If the accept operation was canceled, then the server is stopped.
+            else if (e.SocketError != SocketError.Interrupted && e.SocketError != SocketError.OperationAborted)
             {
                 OnError?.Invoke(new SocketException((int)e.SocketError));
             }
