@@ -13,7 +13,7 @@ public class PacketFrameMiddleware : NetMiddleware
 {
     private readonly ArrayBufferWriter<byte> _buffer = new ArrayBufferWriter<byte>();
 
-    public override void ProcessSend(ref Memory<byte> input, [UnscopedRef] out Memory<byte> output)
+    public override void ProcessSend(ref Memory<byte> input, out Memory<byte> output)
     {
         _buffer.Clear();
         var memory = _buffer.GetMemory(input.Length + 4);
@@ -27,7 +27,7 @@ public class PacketFrameMiddleware : NetMiddleware
     }
 
     public override (bool halt, int consumedFromOrigin) ProcessReceive(ref ReadOnlyMemory<byte> input,
-        [UnscopedRef] out ReadOnlyMemory<byte> output)
+        out ReadOnlyMemory<byte> output)
     {
         // If we don't have enough data to read the length of the packet, we need to wait for more data.
         if (input.Length < 4)
