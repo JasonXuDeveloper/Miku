@@ -75,7 +75,8 @@ namespace Miku.Core
 
             lock (_clients)
             {
-                foreach (var client in _clients)
+                // Stop all clients, make a copy of the list to avoid modifying it while iterating.
+                foreach (var client in _clients.ToArray())
                 {
                     client.Stop();
                 }
@@ -89,14 +90,31 @@ namespace Miku.Core
 
         private void StartAccept()
         {
+            // If the accept socket is null, then the server is stopped.
+            if (_acceptEventArgs == null)
+            {
+                return;
+            }
+
             // Clear any previous accepted socket.
             _acceptEventArgs.AcceptSocket = null;
 
             // Start an asynchronous accept operation.
-            if (!_listenSocket.AcceptAsync(_acceptEventArgs))
+            try
             {
-                // If AcceptAsync returns false, then accept completed synchronously.
-                ProcessAccept(null, _acceptEventArgs);
+                if (!_listenSocket.AcceptAsync(_acceptEventArgs))
+                {
+                    // If AcceptAsync returns false, then accept completed synchronously.
+                    ProcessAccept(null, _acceptEventArgs);
+                }
+            }
+            catch (ObjectDisposedException)
+            {
+                // Ignore ObjectDisposedException. This exception occurs when the socket is closed.
+            }
+            catch (Exception ex)
+            {
+                OnError?.Invoke(ex);
             }
         }
 
@@ -123,7 +141,7 @@ namespace Miku.Core
                         _clients.Remove(client);
                     }
                 };
-                client.OnReceived += data => OnClientDataReceived?.Invoke(client, data);
+                client.OnDataReceived += data => OnClientDataReceived?.Invoke(client, data);
                 client.OnError += OnError;
                 client.Connect(acceptedSocket);
             }

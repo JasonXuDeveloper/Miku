@@ -3,6 +3,8 @@ using System.Buffers;
 using System.Threading;
 using System.Net.Sockets;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 
 namespace Miku.Core
 {
@@ -24,7 +26,7 @@ namespace Miku.Core
         /// <summary>
         /// Event when data is received
         /// </summary>
-        public event Action<ReadOnlyMemory<byte>> OnReceived;
+        public event Action<ReadOnlyMemory<byte>> OnDataReceived;
 
         /// <summary>
         /// Event when an error occurred
@@ -44,7 +46,7 @@ namespace Miku.Core
         /// <summary>
         /// Remote host IP address
         /// </summary>
-        public string Ip => _socket?.RemoteEndPoint?.ToString() ?? "Unknown";
+        public string Ip { get; private set; }
 
         private readonly List<NetMiddleware> _middlewares = new();
         private Socket _socket;
@@ -108,6 +110,7 @@ namespace Miku.Core
             _socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
             _socket.Connect(ip, port);
             _isConnected = true;
+            Ip = ((System.Net.IPEndPoint)_socket.RemoteEndPoint!).Address.ToString();
 
             OnConnected?.Invoke();
 
@@ -131,6 +134,7 @@ namespace Miku.Core
 
             _socket = socket;
             _isConnected = true;
+            Ip = ((System.Net.IPEndPoint)socket.RemoteEndPoint!).Address.ToString();
 
             OnConnected?.Invoke();
 
@@ -296,6 +300,25 @@ namespace Miku.Core
                             }
                         }
 
+                        // still the original data or partially the original data
+                        var offset = Unsafe.ByteOffset(ref MemoryMarshal.GetReference(processedData.Span),
+                            ref MemoryMarshal.GetReference(client._receivedData.WrittenSpan));
+                        // if offset is less than length of _receivedData.WrittenMemory, then it's the original data
+                        if ((long)offset < client._receivedData.WrittenCount)
+                        {
+                            index = (int)offset + processedData.Length;
+                        }
+
+                        // invoke event
+                        try
+                        {
+                            client.OnDataReceived?.Invoke(processedData);
+                        }
+                        catch (Exception e)
+                        {
+                            client.OnError?.Invoke(e);
+                        }
+
                         // get left over data
                         int leftOver = client._receivedData.WrittenCount - index;
                         if (leftOver > 0)
@@ -311,16 +334,6 @@ namespace Miku.Core
                             client._receivedData.Clear();
                         }
 
-                        // invoke event
-                        try
-                        {
-                            client.OnReceived?.Invoke(processedData);
-                        }
-                        catch (Exception e)
-                        {
-                            client.OnError?.Invoke(e);
-                        }
-                        
                         processedData = client._receivedData.WrittenMemory;
                     }
                 }
@@ -336,9 +349,14 @@ namespace Miku.Core
                 }
 
                 cont_receive:
-                if (!client._socket!.ReceiveAsync(args))
+                if (client._socket != null)
                 {
-                    Receive(args);
+                    if (!client._socket.ReceiveAsync(args))
+                        Receive(args);
+                }
+                else
+                {
+                    Stop(args);
                 }
             }
             else
