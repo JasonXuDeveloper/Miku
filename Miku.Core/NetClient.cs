@@ -182,7 +182,7 @@ namespace Miku.Core
         /// <param name="data"></param>
         /// <returns>Whether the data is sent successfully</returns>
         /// <exception cref="InvalidOperationException"></exception>
-        public bool Send(Memory<byte> data)
+        public bool Send(ReadOnlyMemory<byte> data)
         {
             if (!_isConnected)
             {

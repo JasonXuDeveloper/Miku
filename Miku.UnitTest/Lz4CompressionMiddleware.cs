@@ -1,3 +1,4 @@
+using System.Buffers;
 using K4os.Compression.LZ4;
 using Miku.Core;
 
@@ -8,9 +9,13 @@ namespace Miku.UnitTest;
 /// </summary>
 public class Lz4CompressionMiddleware: NetMiddleware
 {
-    public override void ProcessSend(ref Memory<byte> input, out Memory<byte> output)
+    private readonly ArrayBufferWriter<byte> _buffer = new ArrayBufferWriter<byte>();
+
+    public override void ProcessSend(ref ReadOnlyMemory<byte> input, out ReadOnlyMemory<byte> output)
     {
-        output = LZ4Pickler.Pickle(input.Span);
+        _buffer.Clear();
+        LZ4Pickler.Pickle(input.Span, _buffer);
+        output = _buffer.WrittenMemory;
     }
 
     public override (bool halt, int consumedFromOrigin) ProcessReceive(ref ReadOnlyMemory<byte> input, out ReadOnlyMemory<byte> output)

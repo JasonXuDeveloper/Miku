@@ -11,7 +11,7 @@ public class PacketFrameMiddleware : NetMiddleware
 {
     private readonly ArrayBufferWriter<byte> _buffer = new ArrayBufferWriter<byte>();
 
-    public override void ProcessSend(ref Memory<byte> input, out Memory<byte> output)
+    public override void ProcessSend(ref ReadOnlyMemory<byte> input, out ReadOnlyMemory<byte> output)
     {
         _buffer.Clear();
         var memory = _buffer.GetMemory(input.Length + 4);

@@ -12,7 +12,7 @@ namespace Miku.Core
         /// </summary>
         /// <param name="input">A data to be sent (might be processed by other middleware)</param>
         /// <param name="output">A processed data to be sent</param>
-        public abstract void ProcessSend(ref Memory<byte> input, out Memory<byte> output);
+        public abstract void ProcessSend(ref ReadOnlyMemory<byte> input, out ReadOnlyMemory<byte> output);
         
         /// <summary>
         /// Process data after receiving
