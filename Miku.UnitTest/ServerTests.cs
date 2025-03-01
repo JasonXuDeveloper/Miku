@@ -18,7 +18,7 @@ public class ServerTests
         AppDomain.CurrentDomain.UnhandledException += (_, e) => { Console.WriteLine(e.ExceptionObject); };
     }
 
-    [Test, Timeout(1000)]
+    [Test, CancelAfter(1000)]
     public async Task ServerReceiveTest()
     {
         // A data for testing.
@@ -62,13 +62,13 @@ public class ServerTests
         client.Stop();
 
         // await for the server to stop
-        Assert.IsTrue(await tcs.Task);
+        Assert.That(await tcs.Task);
 
         // Stop the server.
         server.Stop();
     }
 
-    [Test, Timeout(1000)]
+    [Test, CancelAfter(1000)]
     public async Task ServerStopsClientTest()
     {
         // A data for testing.
@@ -110,13 +110,13 @@ public class ServerTests
         client.Send(buffer);
 
         // await for the server to stop
-        Assert.IsTrue(await tcs.Task);
+        Assert.That(await tcs.Task);
 
         // Stop the server.
         server.Stop();
     }
 
-    [Test, Timeout(1000)]
+    [Test, CancelAfter(1000)]
     public async Task EchoTest()
     {
         // A data for testing.
@@ -160,13 +160,13 @@ public class ServerTests
         client.Send(buffer);
 
         // await for the server to stop
-        Assert.IsTrue(await tcs.Task);
+        Assert.That(await tcs.Task);
 
         // Stop the server.
         server.Stop();
     }
 
-    [Test, Timeout(1000)]
+    [Test, CancelAfter(1000)]
     public async Task FramingMiddlewareTest()
     {
         // A data for testing.
@@ -216,13 +216,13 @@ public class ServerTests
         client.Send(buffer);
 
         // await for the server to stop
-        Assert.IsTrue(await tcs.Task);
+        Assert.That(await tcs.Task);
 
         // Stop the server.
         server.Stop();
     }
 
-    [Test, Timeout(1000)]
+    [Test, CancelAfter(1000)]
     public async Task MultipleMiddlewareTest()
     {
         // A data for testing.
@@ -274,13 +274,13 @@ public class ServerTests
         client.Send(buffer);
 
         // await for the server to stop
-        Assert.IsTrue(await tcs.Task);
+        Assert.That(await tcs.Task);
 
         // Stop the server.
         server.Stop();
     }
 
-    [Test, Timeout(1000)]
+    [Test, CancelAfter(1000)]
     public async Task PingPongTest()
     {
         // ip port info
@@ -290,25 +290,25 @@ public class ServerTests
         TaskCompletionSource<IProtocol> tcs = new TaskCompletionSource<IProtocol>();
         Ping dataToSend = new Ping
         {
-            // Field1 = 1,
-            // Field2 = "2",
-            // Field3 = 3.5f,
-            // Field4 = 4.5,
-            // Field5 = 5,
-            // Field6 = 6,
-            // Field7 = 7,
-            // Field8 = Guid.NewGuid()
+            Field1 = 1,
+            Field2 = "2",
+            Field3 = 3.5f,
+            Field4 = 4.5,
+            Field5 = 5,
+            Field6 = 6,
+            Field7 = 7,
+            Field8 = Guid.NewGuid()
         };
         Pong dataToReceive = new Pong
         {
-            // Field1 = 1,
-            // Field2 = "2",
-            // Field3 = 3.5f,
-            // Field4 = 4.5,
-            // Field5 = 5,
-            // Field6 = 6,
-            // Field7 = 7,
-            // Field8 = Guid.NewGuid()
+            Field1 = 1,
+            Field2 = "2",
+            Field3 = 3.5f,
+            Field4 = 4.5,
+            Field5 = 5,
+            Field6 = 6,
+            Field7 = 7,
+            Field8 = Guid.NewGuid()
         };
 
         // Create a new server.
@@ -363,7 +363,7 @@ public class ServerTests
         client.Send(dataToSend.Serialize());
 
         // await for the server to stop
-        Assert.IsTrue(await tcs.Task is Pong pong && pong.Equals(dataToReceive));
+        Assert.That(await tcs.Task is Pong pong && pong.Equals(dataToReceive));
 
         // Stop the server.
         server.Stop();
