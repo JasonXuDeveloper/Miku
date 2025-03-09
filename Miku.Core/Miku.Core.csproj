@@ -21,7 +21,7 @@
         <BranchName>refs/heads/main</BranchName>
         <PublishRepositoryUrl>true</PublishRepositoryUrl>
         <EmbedUntrackedSources>true</EmbedUntrackedSources>
-        <TargetFrameworks>net6.0;net5.0;net7.0;net8.0;net9.0;netstandard2.1</TargetFrameworks>
+        <TargetFrameworks>net6.0;netstandard2.1;</TargetFrameworks>
     </PropertyGroup>
 
     <ItemGroup>
@@ -29,6 +29,8 @@
     </ItemGroup>
 
     <ItemGroup>
+      <PackageReference Include="System.Buffers" Version="4.6.0" />
+      <PackageReference Include="System.Memory" Version="4.6.0" />
       <PackageReference Include="System.Runtime.CompilerServices.Unsafe" Version="6.1.0" />
     </ItemGroup>
 
