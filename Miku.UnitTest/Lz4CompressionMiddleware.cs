@@ -7,18 +7,19 @@ namespace Miku.UnitTest;
 /// <summary>
 /// Middleware that compresses and decompresses data using the LZ4 algorithm.
 /// </summary>
-public class Lz4CompressionMiddleware: NetMiddleware
+public class Lz4CompressionMiddleware : INetMiddleware
 {
     private readonly ArrayBufferWriter<byte> _buffer = new ArrayBufferWriter<byte>();
 
-    public override void ProcessSend(ref ReadOnlyMemory<byte> input, out ReadOnlyMemory<byte> output)
+    public void ProcessSend(ref ReadOnlyMemory<byte> input, out ReadOnlyMemory<byte> output)
     {
         _buffer.Clear();
         LZ4Pickler.Pickle(input.Span, _buffer);
         output = _buffer.WrittenMemory;
     }
 
-    public override (bool halt, int consumedFromOrigin) ProcessReceive(ref ReadOnlyMemory<byte> input, out ReadOnlyMemory<byte> output)
+    public (bool halt, int consumedFromOrigin) ProcessReceive(ref ReadOnlyMemory<byte> input,
+        out ReadOnlyMemory<byte> output)
     {
         try
         {

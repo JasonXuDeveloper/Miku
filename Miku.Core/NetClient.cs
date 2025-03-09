@@ -48,7 +48,7 @@ namespace Miku.Core
         /// </summary>
         public string Ip { get; private set; }
 
-        private readonly List<NetMiddleware> _middlewares = new();
+        private readonly List<INetMiddleware> _middlewares = new();
         private Socket _socket;
         private bool _isConnected;
         private int _sending;
@@ -80,7 +80,7 @@ namespace Miku.Core
         /// Add a middleware to the client
         /// </summary>
         /// <param name="middleware"></param>
-        public void AddMiddleware(NetMiddleware middleware)
+        public void AddMiddleware(INetMiddleware middleware)
         {
             _middlewares.Add(middleware);
         }
@@ -89,7 +89,7 @@ namespace Miku.Core
         /// Remove a middleware from the client
         /// </summary>
         /// <param name="middleware"></param>
-        public void RemoveMiddleware(NetMiddleware middleware)
+        public void RemoveMiddleware(INetMiddleware middleware)
         {
             _middlewares.Remove(middleware);
         }

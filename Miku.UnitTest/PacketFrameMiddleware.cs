@@ -7,11 +7,11 @@ namespace Miku.UnitTest;
 /// <summary>
 /// Middleware for processing packets. Prevent framing due to tcp.
 /// </summary>
-public class PacketFrameMiddleware : NetMiddleware
+public class PacketFrameMiddleware : INetMiddleware
 {
     private readonly ArrayBufferWriter<byte> _buffer = new ArrayBufferWriter<byte>();
 
-    public override void ProcessSend(ref ReadOnlyMemory<byte> input, out ReadOnlyMemory<byte> output)
+    public void ProcessSend(ref ReadOnlyMemory<byte> input, out ReadOnlyMemory<byte> output)
     {
         _buffer.Clear();
         var memory = _buffer.GetMemory(input.Length + 4);
@@ -24,7 +24,7 @@ public class PacketFrameMiddleware : NetMiddleware
         Console.WriteLine($"Send: {string.Join(',', output.ToArray())}");
     }
 
-    public override (bool halt, int consumedFromOrigin) ProcessReceive(ref ReadOnlyMemory<byte> input,
+    public (bool halt, int consumedFromOrigin) ProcessReceive(ref ReadOnlyMemory<byte> input,
         out ReadOnlyMemory<byte> output)
     {
         // If we don't have enough data to read the length of the packet, we need to wait for more data.
