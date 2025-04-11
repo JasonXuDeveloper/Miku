@@ -138,18 +138,11 @@ jobs:
             6.0.x
             2.1.x
 
-      # Restore dependencies
-      - name: Restore dependencies
-        run: dotnet restore
-
-      # Build the solution
-      - name: Build solution
-        run: dotnet build --configuration Release /p:OutputPath=../artifacts
-
       # Push NuGet packages
       - name: Push NuGet Packages
         run: |
           echo "Current directory: $(pwd)"
-          for package in ./artifacts/*.nupkg; do
-            dotnet nuget push "$package" --api-key ${{ secrets.MYTOKEN }} --source https://api.nuget.org/v3/index.json
+          dotnet pack Miku.Core/Miku.Core.csproj  -c Release
+          for package in $(find ./Miku.Core/bin/Release -name "*.nupkg" -print0 | sort -z -u | xargs -0 -n1 echo); do
+            dotnet nuget push "$package" --api-key ${{ secrets.MYTOKEN }} --source https://api.nuget.org/v3/index.json --skip-duplicate
           done

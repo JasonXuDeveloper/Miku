@@ -297,18 +297,32 @@ namespace Miku.Core
                             }
                             catch (Exception e)
                             {
+                                client._receivedData.Clear();
                                 client.OnError?.Invoke(e);
                                 goto cont_receive;
                             }
                         }
 
                         // still the original data or partially the original data
-                        var offset = Unsafe.ByteOffset(ref MemoryMarshal.GetReference(processedData.Span),
-                            ref MemoryMarshal.GetReference(client._receivedData.WrittenSpan));
+                        ref byte processed = ref MemoryMarshal.GetReference(processedData.Span);
+                        ref byte originalData = ref MemoryMarshal.GetReference(client._receivedData.WrittenSpan);
+                        bool original = Unsafe.IsAddressGreaterThan(ref processed, ref originalData) &&
+                                        Unsafe.IsAddressLessThan(ref processed,
+                                            ref Unsafe.Add(ref originalData, client._receivedData.WrittenCount));
                         // if offset is less than length of _receivedData.WrittenMemory, then it's the original data
-                        if ((long)offset < client._receivedData.WrittenCount)
+                        if (original)
                         {
-                            index = (int)offset + processedData.Length;
+                            IntPtr diff = Unsafe.ByteOffset(
+                                ref Unsafe.Add(ref processed, processedData.Length),
+                                ref originalData);
+                            if (diff.ToInt64() > int.MaxValue)
+                            {
+                                client.OnError?.Invoke(new ArithmeticException("diff is too large"));
+                                client._receivedData.Clear();
+                                goto cont_receive;
+                            }
+
+                            index = diff.ToInt32();
                         }
 
                         // invoke event
@@ -326,7 +340,7 @@ namespace Miku.Core
                         if (leftOver > 0 && index < client._receivedData.WrittenCount && index > 0)
                         {
                             // copy left over data to temp stack memory - faster than array pool
-                            if (leftOver <=1024)
+                            if (leftOver <= 1024)
                             {
                                 client._receivedData.WrittenSpan.Slice(index).CopyTo(tempStackMem);
                                 client._receivedData.Clear();

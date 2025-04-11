@@ -4,7 +4,7 @@
         <ImplicitUsings>disable</ImplicitUsings>
         <Nullable>disable</Nullable>
         <LangVersion>9</LangVersion>
-        <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+        <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
         <Version>1.0.4</Version>
         <PackageId>Miku</PackageId>
         <Title>Miku</Title>
@@ -14,14 +14,29 @@
         <PackageProjectUrl>https://github.com/JasonXuDeveloper/Miku</PackageProjectUrl>
         <RepositoryUrl>https://github.com/JasonXuDeveloper/Miku</RepositoryUrl>
         <RepositoryType>git</RepositoryType>
-        <PackageTags>ECS</PackageTags>
+        <PackageTags>TCP;Networking;High-Perofrmance</PackageTags>
         <PackageLicenseExpression>MIT</PackageLicenseExpression>
         <PackageReadmeFile>README.md</PackageReadmeFile>
         <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
         <BranchName>refs/heads/main</BranchName>
+        <TargetFrameworks>net6.0;netstandard2.1;</TargetFrameworks>
         <PublishRepositoryUrl>true</PublishRepositoryUrl>
         <EmbedUntrackedSources>true</EmbedUntrackedSources>
-        <TargetFrameworks>net6.0;netstandard2.1;</TargetFrameworks>
+        <IncludeSource>true</IncludeSource>
+        <DebugType>embedded</DebugType>
+        <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
+    </PropertyGroup>
+
+    <!--  for .NET Standard  -->
+    <PropertyGroup Condition="'$(TargetFramework)' == 'netstandard2.1'">
+        <TargetFrameworkMonikerAssemblyAttributesPath>$([System.IO.Path]::Combine('$(IntermediateOutputPath)','$(TargetFrameworkMoniker).AssemblyAttributes$(DefaultLanguageSourceExtension)'))</TargetFrameworkMonikerAssemblyAttributesPath>
+    </PropertyGroup>
+    <ItemGroup>
+        <EmbeddedFiles Include="$(GeneratedAssemblyInfoFile)"/>
+    </ItemGroup>
+
+    <PropertyGroup Condition="'$(GITHUB_ACTIONS)' == 'true'">
+        <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
     </PropertyGroup>
 
     <ItemGroup>
@@ -29,9 +44,10 @@
     </ItemGroup>
 
     <ItemGroup>
-      <PackageReference Include="System.Buffers" Version="4.6.0" />
-      <PackageReference Include="System.Memory" Version="4.6.0" />
-      <PackageReference Include="System.Runtime.CompilerServices.Unsafe" Version="6.1.0" />
+        <PackageReference Include="Microsoft.SourceLink.GitHub" Version="1.0.0" PrivateAssets="All"/>
+        <PackageReference Include="System.Buffers" Version="4.6.0"/>
+        <PackageReference Include="System.Memory" Version="4.6.0"/>
+        <PackageReference Include="System.Runtime.CompilerServices.Unsafe" Version="6.1.0"/>
     </ItemGroup>
 
 </Project>
