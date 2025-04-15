@@ -126,7 +126,7 @@ namespace Miku.Core
                 Socket acceptedSocket = e.AcceptSocket;
 
                 // Create a new NetClient using the accepted socket.
-                NetClient client = new NetClient(BufferSize);
+                NetClient client = new NetClient();
                 lock (_clients)
                 {
                     _clients.Add(client);
@@ -143,7 +143,7 @@ namespace Miku.Core
                 };
                 client.OnDataReceived += data => OnClientDataReceived?.Invoke(client, data);
                 client.OnError += OnError;
-                client.Connect(acceptedSocket);
+                client.Connect(acceptedSocket, BufferSize);
             }
             // If the accept operation was canceled, then the server is stopped.
             else if (e.SocketError != SocketError.Interrupted && e.SocketError != SocketError.OperationAborted)

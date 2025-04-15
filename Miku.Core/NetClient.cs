@@ -53,28 +53,10 @@ namespace Miku.Core
         private bool _isConnected;
         private int _sending;
 
-        private readonly SocketAsyncEventArgs _receiveArg;
-        private readonly SocketAsyncEventArgs _sendArg;
-        private readonly ArrayBufferWriter<byte> _receivedData;
+        private SocketAsyncEventArgs _receiveArg;
+        private SocketAsyncEventArgs _sendArg;
+        private ArrayBufferWriter<byte> _receivedData;
         private byte[] _tempSendBuffer;
-
-        /// <summary>
-        /// Create a new instance of NetClient
-        /// </summary>
-        /// <param name="bufferSize"></param>
-        public NetClient(int bufferSize = 1024)
-        {
-            _receivedData = new ArrayBufferWriter<byte>(bufferSize);
-
-            _receiveArg = new SocketAsyncEventArgs();
-            _receiveArg.SetBuffer(new byte[bufferSize], 0, bufferSize);
-            _receiveArg.UserToken = this;
-            _receiveArg.Completed += HandleReadWrite;
-
-            _sendArg = new SocketAsyncEventArgs();
-            _sendArg.UserToken = this;
-            _sendArg.Completed += HandleReadWrite;
-        }
 
         /// <summary>
         /// Add a middleware to the client
@@ -99,8 +81,9 @@ namespace Miku.Core
         /// </summary>
         /// <param name="ip"></param>
         /// <param name="port"></param>
+        /// <param name="bufferSize"></param>
         /// <exception cref="InvalidOperationException"></exception>
-        public void Connect(string ip, int port)
+        public void Connect(string ip, int port, int bufferSize = 1024)
         {
             if (_isConnected)
             {
@@ -111,6 +94,17 @@ namespace Miku.Core
             _socket.Connect(ip, port);
             _isConnected = true;
             Ip = ((System.Net.IPEndPoint)_socket.RemoteEndPoint!).Address.ToString();
+
+            _receivedData = new ArrayBufferWriter<byte>(bufferSize);
+
+            _receiveArg = new SocketAsyncEventArgs();
+            _receiveArg.SetBuffer(new byte[bufferSize], 0, bufferSize);
+            _receiveArg.UserToken = this;
+            _receiveArg.Completed += HandleReadWrite;
+
+            _sendArg = new SocketAsyncEventArgs();
+            _sendArg.UserToken = this;
+            _sendArg.Completed += HandleReadWrite;
 
             OnConnected?.Invoke();
 
@@ -124,8 +118,9 @@ namespace Miku.Core
         /// When a server accepts a connection, use this method to connect the client
         /// </summary>
         /// <param name="socket"></param>
+        /// <param name="bufferSize"></param>
         /// <exception cref="InvalidOperationException"></exception>
-        internal void Connect(Socket socket)
+        internal void Connect(Socket socket, int bufferSize = 1024)
         {
             if (_isConnected)
             {
@@ -135,6 +130,17 @@ namespace Miku.Core
             _socket = socket;
             _isConnected = true;
             Ip = ((System.Net.IPEndPoint)socket.RemoteEndPoint!).Address.ToString();
+            
+            _receivedData = new ArrayBufferWriter<byte>(bufferSize);
+
+            _receiveArg = new SocketAsyncEventArgs();
+            _receiveArg.SetBuffer(new byte[bufferSize], 0, bufferSize);
+            _receiveArg.UserToken = this;
+            _receiveArg.Completed += HandleReadWrite;
+
+            _sendArg = new SocketAsyncEventArgs();
+            _sendArg.UserToken = this;
+            _sendArg.Completed += HandleReadWrite;
 
             OnConnected?.Invoke();
 
