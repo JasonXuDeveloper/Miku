@@ -3,8 +3,6 @@ using System.Buffers;
 using System.Collections.Concurrent;
 using System.Net.Sockets;
 using System.Collections.Generic;
-using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
 using System.Threading;
 
 namespace Miku.Core
@@ -347,134 +345,49 @@ namespace Miku.Core
 
         private static void Receive(SocketAsyncEventArgs args)
         {
-            NetClient client = (NetClient)args.UserToken!;
-            if (!client.IsConnected || client._socket == null)
+            var client = (NetClient)args.UserToken!;
+            var sock = client._socket;
+            if (!client.IsConnected || sock == null)
+                return;
+
+            // handle socket‐level close/errors
+            if (args.SocketError != SocketError.Success || args.BytesTransferred == 0)
             {
+                client.Stop();
                 return;
             }
 
             // check if the remote host closed the connection
             if (args is { BytesTransferred: > 0, SocketError: SocketError.Success })
             {
-                int totalConsumed = 0;
                 bool hasLeftover = client._receivedData.WrittenCount > 0;
                 ReadOnlyMemory<byte> receivedData = new(args.Buffer, 0, args.BytesTransferred);
-                ReadOnlyMemory<byte> processData = receivedData;
-
+                ReadOnlyMemory<byte> remainder;
                 if (hasLeftover)
                 {
                     // copy
                     client._receivedData.Write(receivedData.Span);
-                    processData = client._receivedData.WrittenMemory;
+                    Process(client, client._receivedData.WrittenMemory, out remainder);
                 }
-
-                try
-                {
-                    ReadOnlyMemory<byte> src = processData;
-
-                    while (!processData.IsEmpty)
-                    {
-                        // reverse order - last middleware first
-                        for (int i = client._middlewares.Count - 1; i >= 0; i--)
-                        {
-                            var middleware = client._middlewares[i];
-                            try
-                            {
-                                var (halt, consumed) = middleware.ProcessReceive(ref processData, out processData);
-                                // some middlewares might halt the processing
-                                if (halt)
-                                {
-                                    goto cont_receive;
-                                }
-
-                                totalConsumed += consumed;
-                            }
-                            catch (Exception e)
-                            {
-                                client._receivedData.Clear();
-                                client.OnError?.Invoke(e);
-                                goto cont_receive;
-                            }
-                        }
-
-                        // invoke event
-                        try
-                        {
-                            client.OnDataReceived?.Invoke(processData);
-                        }
-                        catch (Exception e)
-                        {
-                            client.OnError?.Invoke(e);
-                        }
-
-                        for (int i = client._middlewares.Count - 1; i >= 0; i--)
-                        {
-                            var middleware = client._middlewares[i];
-                            try
-                            {
-                                middleware.PostReceive();
-                            }
-                            catch (Exception e)
-                            {
-                                client.OnError?.Invoke(e);
-                            }
-                        }
-
-                        // still the original data or partially the original data
-                        var offset = Unsafe.ByteOffset(ref MemoryMarshal.GetReference(src.Span),
-                            ref MemoryMarshal.GetReference(processData.Span)).ToInt64();
-                        if (Math.Abs(offset) < src.Length)
-                        {
-                            totalConsumed = (int)offset + processData.Length;
-                        }
-
-                        processData = totalConsumed < src.Length
-                            ? src.Slice(totalConsumed)
-                            : ReadOnlyMemory<byte>.Empty;
-                    }
-                }
-                catch (Exception e)
-                {
-                    client.OnError?.Invoke(e);
-                }
-
-                cont_receive:
-                if (totalConsumed > 0)
-                {
-                    // not completely consumed
-                    if (totalConsumed < args.BytesTransferred)
-                    {
-                        // copy tail of receivedData to a temporary buffer
-                        if (hasLeftover)
-                        {
-                            byte[] tempBuffer =
-                                ArrayPool<byte>.Shared.Rent(client._receivedData.WrittenCount - totalConsumed);
-                            client._receivedData.WrittenMemory.Span.Slice(totalConsumed).CopyTo(tempBuffer);
-                            client._receivedData.Clear();
-                            client._receivedData.Write(tempBuffer);
-                            ArrayPool<byte>.Shared.Return(tempBuffer);
-                        }
-                        else
-                        {
-                            client._receivedData.Clear();
-                            client._receivedData.Write(args.Buffer.AsSpan(totalConsumed,
-                                args.BytesTransferred - totalConsumed));
-                        }
-                    }
-                    else
-                    {
-                        client._receivedData.Clear();
-                    }
-                }
-                // consumed nothing
                 else
+                {
+                    Process(client, receivedData, out remainder);
+                }
+
+                if (!remainder.IsEmpty)
                 {
                     if (hasLeftover)
                     {
+                        byte[] temp = ArrayPool<byte>.Shared.Rent(remainder.Length);
+                        remainder.Span.CopyTo(temp);
                         client._receivedData.Clear();
+                        client._receivedData.Write(temp);
+                        ArrayPool<byte>.Shared.Return(temp);
                     }
-
-                    client._receivedData.Write(processData.Span);
+                    else
+                    {
+                        client._receivedData.Write(remainder.Span);
+                    }
                 }
 
                 if (client._socket != null)
@@ -491,6 +404,78 @@ namespace Miku.Core
             {
                 Stop(args);
             }
+        }
+
+        private static void Process(NetClient client, ReadOnlyMemory<byte> src, out ReadOnlyMemory<byte> remainder)
+        {
+            remainder = ReadOnlyMemory<byte>.Empty;
+
+            if (src.IsEmpty)
+                return;
+            int totalConsumed = 0;
+            ReadOnlyMemory<byte> processData = src;
+
+            while (!processData.IsEmpty)
+            {
+                // reverse order - last middleware first
+                if (client._middlewares.Count == 0)
+                {
+                    totalConsumed += processData.Length;
+                }
+                else
+                {
+                    for (int i = client._middlewares.Count - 1; i >= 0; i--)
+                    {
+                        var middleware = client._middlewares[i];
+                        try
+                        {
+                            var (halt, consumed) = middleware.ProcessReceive(ref processData, out processData);
+                            // some middlewares might halt the processing
+                            if (halt)
+                            {
+                                return;
+                            }
+
+                            totalConsumed += consumed;
+                        }
+                        catch (Exception e)
+                        {
+                            client._receivedData.Clear();
+                            client.OnError?.Invoke(e);
+                            return;
+                        }
+                    }
+                }
+
+                // invoke event
+                try
+                {
+                    client.OnDataReceived?.Invoke(processData);
+                }
+                catch (Exception e)
+                {
+                    client.OnError?.Invoke(e);
+                }
+
+                for (int i = client._middlewares.Count - 1; i >= 0; i--)
+                {
+                    var middleware = client._middlewares[i];
+                    try
+                    {
+                        middleware.PostReceive();
+                    }
+                    catch (Exception e)
+                    {
+                        client.OnError?.Invoke(e);
+                    }
+                }
+
+                processData = totalConsumed < src.Length
+                    ? src.Slice(totalConsumed)
+                    : ReadOnlyMemory<byte>.Empty;
+            }
+
+            remainder = totalConsumed < src.Length ? src.Slice(totalConsumed) : ReadOnlyMemory<byte>.Empty;
         }
     }
 }

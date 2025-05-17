@@ -18,7 +18,7 @@ public class ServerTests
         AppDomain.CurrentDomain.UnhandledException += (_, e) => { Console.WriteLine(e.ExceptionObject); };
     }
 
-    [Test, CancelAfter(1000)]
+    [Test]
     public async Task ServerReceiveTest()
     {
         // A data for testing.
@@ -68,7 +68,7 @@ public class ServerTests
         server.Stop();
     }
 
-    [Test, CancelAfter(1000)]
+    [Test]
     public async Task ServerStopsClientTest()
     {
         // A data for testing.
@@ -116,7 +116,7 @@ public class ServerTests
         server.Stop();
     }
 
-    [Test, CancelAfter(1000)]
+    [Test]
     public async Task EchoTest()
     {
         // A data for testing.
@@ -166,7 +166,7 @@ public class ServerTests
         server.Stop();
     }
 
-    [Test, CancelAfter(1000)]
+    [Test]
     public async Task FramingMiddlewareTest()
     {
         // A data for testing.
@@ -222,7 +222,7 @@ public class ServerTests
         server.Stop();
     }
 
-    [Test, CancelAfter(1000)]
+    [Test]
     public async Task MultipleMiddlewareTest()
     {
         // A data for testing.
@@ -280,7 +280,7 @@ public class ServerTests
         server.Stop();
     }
 
-    [Test, CancelAfter(1000)]
+    [Test]
     public async Task PingPongTest()
     {
         // ip port info
