@@ -5,7 +5,7 @@
         <Nullable>disable</Nullable>
         <LangVersion>9</LangVersion>
         <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
-        <Version>1.0.7</Version>
+        <Version>1.0.8</Version>
         <PackageId>Miku</PackageId>
         <Title>Miku</Title>
         <Authors>JasonXuDeveloper</Authors>
