@@ -15,6 +15,11 @@ namespace Miku.Core
         void ProcessSend(ref ReadOnlyMemory<byte> input, out ReadOnlyMemory<byte> output);
 
         /// <summary>
+        /// Triggered after sending data
+        /// </summary>
+        void PostSend();
+
+        /// <summary>
         /// Process data after receiving
         /// </summary>
         /// <param name="input">A received data (might be processed by other middleware)</param>
@@ -22,5 +27,10 @@ namespace Miku.Core
         /// <returns>Whether to halt the processing and how many bytes are consumed</returns>
         (bool halt, int consumedFromOrigin) ProcessReceive(ref ReadOnlyMemory<byte> input,
             out ReadOnlyMemory<byte> output);
+        
+        /// <summary>
+        /// Triggered after receiving data
+        /// </summary>
+        void PostReceive();
     }
 }

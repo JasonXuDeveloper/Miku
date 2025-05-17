@@ -1,10 +1,11 @@
 using System;
 using System.Buffers;
-using System.Threading;
+using System.Collections.Concurrent;
 using System.Net.Sockets;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using System.Threading;
 
 namespace Miku.Core
 {
@@ -41,7 +42,7 @@ namespace Miku.Core
         /// <summary>
         /// Whether the client is connected
         /// </summary>
-        public bool IsConnected => _isConnected;
+        public bool IsConnected => Volatile.Read(ref _isConnected) == 1;
 
         /// <summary>
         /// Remote host IP address
@@ -50,13 +51,13 @@ namespace Miku.Core
 
         private readonly List<INetMiddleware> _middlewares = new();
         private Socket _socket;
-        private bool _isConnected;
+        private int _isConnected;
         private int _sending;
 
         private SocketAsyncEventArgs _receiveArg;
         private SocketAsyncEventArgs _sendArg;
         private ArrayBufferWriter<byte> _receivedData;
-        private byte[] _tempSendBuffer;
+        private ConcurrentQueue<ArraySegment<byte>> _sendQueue;
 
         /// <summary>
         /// Add a middleware to the client
@@ -85,20 +86,22 @@ namespace Miku.Core
         /// <exception cref="InvalidOperationException"></exception>
         public void Connect(string ip, int port, int bufferSize = 1024)
         {
-            if (_isConnected)
+            if (IsConnected)
             {
                 throw new InvalidOperationException("Already connected");
             }
 
             _socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
             _socket.Connect(ip, port);
-            _isConnected = true;
+            _socket.NoDelay = true;
+            Interlocked.Exchange(ref _isConnected, 1);
             Ip = ((System.Net.IPEndPoint)_socket.RemoteEndPoint!).Address.ToString();
 
             _receivedData = new ArrayBufferWriter<byte>(bufferSize);
+            _sendQueue = new ConcurrentQueue<ArraySegment<byte>>();
 
             _receiveArg = new SocketAsyncEventArgs();
-            _receiveArg.SetBuffer(new byte[bufferSize], 0, bufferSize);
+            _receiveArg.SetBuffer(ArrayPool<byte>.Shared.Rent(bufferSize), 0, bufferSize);
             _receiveArg.UserToken = this;
             _receiveArg.Completed += HandleReadWrite;
 
@@ -122,19 +125,21 @@ namespace Miku.Core
         /// <exception cref="InvalidOperationException"></exception>
         internal void Connect(Socket socket, int bufferSize = 1024)
         {
-            if (_isConnected)
+            if (IsConnected)
             {
                 throw new InvalidOperationException("Already connected");
             }
 
             _socket = socket;
-            _isConnected = true;
+            _socket.NoDelay = true;
+            Interlocked.Exchange(ref _isConnected, 1);
             Ip = ((System.Net.IPEndPoint)socket.RemoteEndPoint!).Address.ToString();
             
             _receivedData = new ArrayBufferWriter<byte>(bufferSize);
+            _sendQueue = new ConcurrentQueue<ArraySegment<byte>>();
 
             _receiveArg = new SocketAsyncEventArgs();
-            _receiveArg.SetBuffer(new byte[bufferSize], 0, bufferSize);
+            _receiveArg.SetBuffer(ArrayPool<byte>.Shared.Rent(bufferSize), 0, bufferSize);
             _receiveArg.UserToken = this;
             _receiveArg.Completed += HandleReadWrite;
 
@@ -155,21 +160,40 @@ namespace Miku.Core
         /// </summary>
         public void Stop()
         {
-            if (!_isConnected)
+            if (!IsConnected)
             {
                 return;
             }
+            Interlocked.Exchange(ref _isConnected, 0);
+            Interlocked.Exchange(ref _sending, 0);
 
-            _isConnected = false;
+            var receiveBuffer = _receiveArg.Buffer;
             _socket?.Shutdown(SocketShutdown.Both);
             _socket?.Close();
             _socket?.Dispose();
             _socket = null;
 
-            if (_tempSendBuffer != null)
+            _receiveArg.Completed -= HandleReadWrite;
+            _sendArg.Completed -= HandleReadWrite;
+            try
             {
-                ArrayPool<byte>.Shared.Return(_tempSendBuffer);
-                _tempSendBuffer = null;
+                _receiveArg.Dispose();
+                _sendArg.Dispose();
+            }
+            catch
+            {
+                // ignore
+            }
+
+            // return buffer
+            if (receiveBuffer != null)
+            {
+                ArrayPool<byte>.Shared.Return(receiveBuffer);
+            }
+
+            while (_sendQueue.TryDequeue(out var segment))
+            {
+                ArrayPool<byte>.Shared.Return(segment.Array!);
             }
 
             try
@@ -188,17 +212,12 @@ namespace Miku.Core
         /// <param name="data"></param>
         /// <returns>Whether the data is sent successfully</returns>
         /// <exception cref="InvalidOperationException"></exception>
-        public bool Send(ReadOnlyMemory<byte> data)
+        public void Send(ReadOnlyMemory<byte> data)
         {
-            if (!_isConnected)
+            if (!IsConnected)
             {
-                throw new InvalidOperationException("Not connected");
-            }
-
-            // ensure only one sending operation at a time, no concurrent sending, by using Interlocked
-            if (Interlocked.CompareExchange(ref _sending, 1, 0) == 1)
-            {
-                return false;
+                OnError?.Invoke(new InvalidOperationException("Not connected"));
+                return;
             }
 
             // process through middlewares
@@ -211,22 +230,74 @@ namespace Miku.Core
                 catch (Exception e)
                 {
                     OnError?.Invoke(e);
-                    // reset sending flag
-                    Interlocked.Exchange(ref _sending, 0);
-                    return false;
+                    return;
                 }
             }
 
-            _tempSendBuffer = ArrayPool<byte>.Shared.Rent(data.Length);
-            data.Span.CopyTo(_tempSendBuffer);
-            _sendArg.SetBuffer(_tempSendBuffer, 0, data.Length);
+            var tempSendBuffer = ArrayPool<byte>.Shared.Rent(data.Length);
+            data.Span.CopyTo(tempSendBuffer);
 
-            if (!_socket.SendAsync(_sendArg))
+            foreach (var middleware in _middlewares)
             {
-                HandleReadWrite(null, _sendArg);
+                try
+                {
+                    middleware.PostSend();
+                }
+                catch (Exception e)
+                {
+                    OnError?.Invoke(e);
+                }
             }
 
-            return true;
+            _sendQueue.Enqueue(new ArraySegment<byte>(tempSendBuffer, 0, data.Length));
+            ProcessSend();
+        }
+
+        private void ProcessSend()
+        {
+            if (!IsConnected)
+            {
+                while (_sendQueue.TryDequeue(out var segment))
+                {
+                    ArrayPool<byte>.Shared.Return(segment.Array!);
+                }
+
+                return;
+            }
+
+            if (Interlocked.CompareExchange(ref _sending, 1, 0) == 1)
+            {
+                return;
+            }
+
+            var sock = _socket;
+            if (sock == null || Volatile.Read(ref _isConnected) == 0)
+            {
+                Interlocked.Exchange(ref _sending, 0);
+                return;
+            }
+
+            if (!_sendQueue.TryPeek(out var seg))
+            {
+                Interlocked.Exchange(ref _sending, 0);
+                return;
+            }
+
+            _sendArg.SetBuffer(seg);
+
+            try
+            {
+                if (!sock.SendAsync(_sendArg))
+                {
+                    HandleReadWrite(null, _sendArg);
+                }
+            }
+            catch (Exception e)
+            {
+                Interlocked.Exchange(ref _sending, 0);
+                OnError?.Invoke(e);
+                Stop();
+            }
         }
 
         private static void HandleReadWrite(object sender, SocketAsyncEventArgs args)
@@ -235,11 +306,14 @@ namespace Miku.Core
             {
                 case SocketAsyncOperation.Send:
                     NetClient client = (NetClient)args.UserToken!;
-                    // return buffer
-                    ArrayPool<byte>.Shared.Return(client._tempSendBuffer!);
-                    client._tempSendBuffer = null;
-                    args.SetBuffer(null, 0, 0);
-                    // reset sending flag
+                    if (client._sendQueue.TryDequeue(out var seg))
+                    {
+                        // return buffer
+                        ArrayPool<byte>.Shared.Return(seg.Array!);
+                        // set buffer
+                        args.SetBuffer(null, 0, 0);
+                    }
+
                     Interlocked.Exchange(ref client._sending, 0);
 
                     //check connection
@@ -247,6 +321,11 @@ namespace Miku.Core
                     {
                         client.OnError?.Invoke(new SocketException((int)args.SocketError));
                         Stop(args);
+                    }
+                    // process next send
+                    else if (!client._sendQueue.IsEmpty)
+                    {
+                        client.ProcessSend();
                     }
 
                     break;
@@ -268,38 +347,46 @@ namespace Miku.Core
         private static void Receive(SocketAsyncEventArgs args)
         {
             NetClient client = (NetClient)args.UserToken!;
+            if (!client.IsConnected || client._socket == null)
+            {
+                return;
+            }
 
             // check if the remote host closed the connection
             if (args is { BytesTransferred: > 0, SocketError: SocketError.Success })
             {
+                int totalConsumed = 0;
+                bool hasLeftover = client._receivedData.WrittenCount > 0;
+                ReadOnlyMemory<byte> receivedData = new(args.Buffer, 0, args.BytesTransferred);
+                ReadOnlyMemory<byte> processData = receivedData;
+
+                if (hasLeftover)
+                {
+                    // copy
+                    client._receivedData.Write(receivedData.Span);
+                    processData = client._receivedData.WrittenMemory;
+                }
+
                 try
                 {
-                    ReadOnlySpan<byte> receivedData = new(args.Buffer, 0, args.BytesTransferred);
-                    // copy
-                    client._receivedData.Write(receivedData);
+                    ReadOnlyMemory<byte> src = processData;
 
-                    // process through middlewares, reverse order
-                    ReadOnlyMemory<byte> processedData = client._receivedData.WrittenMemory;
-                    // temp stack memory
-                    Span<byte> tempStackMem = stackalloc byte[1024];
-                    // repeat until all data is processed
-                    while (!processedData.IsEmpty)
+                    while (!processData.IsEmpty)
                     {
-                        int index = 0;
                         // reverse order - last middleware first
                         for (int i = client._middlewares.Count - 1; i >= 0; i--)
                         {
                             var middleware = client._middlewares[i];
                             try
                             {
-                                var (halt, consumed) = middleware.ProcessReceive(ref processedData, out processedData);
+                                var (halt, consumed) = middleware.ProcessReceive(ref processData, out processData);
                                 // some middlewares might halt the processing
                                 if (halt)
                                 {
                                     goto cont_receive;
                                 }
 
-                                index += consumed;
+                                totalConsumed += consumed;
                             }
                             catch (Exception e)
                             {
@@ -309,78 +396,75 @@ namespace Miku.Core
                             }
                         }
 
-                        // still the original data or partially the original data
-                        ref byte processed = ref MemoryMarshal.GetReference(processedData.Span);
-                        ref byte originalData = ref MemoryMarshal.GetReference(client._receivedData.WrittenSpan);
-                        bool original = Unsafe.IsAddressGreaterThan(ref processed, ref originalData) &&
-                                        Unsafe.IsAddressLessThan(ref processed,
-                                            ref Unsafe.Add(ref originalData, client._receivedData.WrittenCount));
-                        // if offset is less than length of _receivedData.WrittenMemory, then it's the original data
-                        if (original)
-                        {
-                            IntPtr diff = Unsafe.ByteOffset(
-                                ref Unsafe.Add(ref processed, processedData.Length),
-                                ref originalData);
-                            if (diff.ToInt64() > int.MaxValue)
-                            {
-                                client.OnError?.Invoke(new ArithmeticException("diff is too large"));
-                                client._receivedData.Clear();
-                                goto cont_receive;
-                            }
-
-                            index = diff.ToInt32();
-                        }
-
                         // invoke event
                         try
                         {
-                            client.OnDataReceived?.Invoke(processedData);
+                            client.OnDataReceived?.Invoke(processData);
                         }
                         catch (Exception e)
                         {
                             client.OnError?.Invoke(e);
                         }
 
-                        // get left over data
-                        int leftOver = client._receivedData.WrittenCount - index;
-                        if (leftOver > 0 && index < client._receivedData.WrittenCount && index > 0)
+                        for (int i = client._middlewares.Count - 1; i >= 0; i--)
                         {
-                            // copy left over data to temp stack memory - faster than array pool
-                            if (leftOver <= 1024)
+                            var middleware = client._middlewares[i];
+                            try
                             {
-                                client._receivedData.WrittenSpan.Slice(index).CopyTo(tempStackMem);
-                                client._receivedData.Clear();
-                                client._receivedData.Write(tempStackMem.Slice(0, leftOver));
+                                middleware.PostReceive();
                             }
-                            else
+                            catch (Exception e)
                             {
-                                byte[] temp = ArrayPool<byte>.Shared.Rent(leftOver);
-                                client._receivedData.WrittenMemory.Slice(index).CopyTo(temp);
-                                client._receivedData.Clear();
-                                client._receivedData.Write(temp.AsSpan(0, leftOver));
-                                ArrayPool<byte>.Shared.Return(temp);
+                                client.OnError?.Invoke(e);
                             }
-                        }
-                        else
-                        {
-                            client._receivedData.Clear();
                         }
 
-                        processedData = client._receivedData.WrittenMemory;
+                        // still the original data or partially the original data
+                        var offset = Unsafe.ByteOffset(ref MemoryMarshal.GetReference(src.Span),
+                            ref MemoryMarshal.GetReference(processData.Span)).ToInt64();
+                        if (Math.Abs(offset) < src.Length)
+                        {
+                            totalConsumed = (int)offset + processData.Length;
+                        }
+
+                        processData = totalConsumed < src.Length
+                            ? src.Slice(totalConsumed)
+                            : ReadOnlyMemory<byte>.Empty;
                     }
                 }
                 catch (Exception e)
                 {
                     client.OnError?.Invoke(e);
-                    goto cont_receive;
-                }
-
-                if (!client._isConnected || client._socket == null)
-                {
-                    return;
                 }
 
                 cont_receive:
+                if (totalConsumed > 0)
+                {
+                    // copy tail of receivedData to a temporary buffer
+                    if (hasLeftover)
+                    {
+                        byte[] tempBuffer =
+                            ArrayPool<byte>.Shared.Rent(client._receivedData.WrittenCount - totalConsumed);
+                        client._receivedData.WrittenMemory.Span.Slice(totalConsumed).CopyTo(tempBuffer);
+                        client._receivedData.Clear();
+                        client._receivedData.Write(tempBuffer);
+                        ArrayPool<byte>.Shared.Return(tempBuffer);
+                    }
+                    else
+                    {
+                        client._receivedData.Clear();
+                        client._receivedData.Write(args.Buffer.AsSpan(totalConsumed,
+                            args.BytesTransferred - totalConsumed));
+                    }
+                }
+                else
+                {
+                    // reset buffer
+                    if (client._receivedData.WrittenCount > 0)
+                        client._receivedData.Clear();
+                }
+
+
                 if (client._socket != null)
                 {
                     if (!client._socket.ReceiveAsync(args))

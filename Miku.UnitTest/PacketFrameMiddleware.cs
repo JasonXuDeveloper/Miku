@@ -24,6 +24,10 @@ public class PacketFrameMiddleware : INetMiddleware
         Console.WriteLine($"Send: {string.Join(',', output.ToArray())}");
     }
 
+    public void PostSend()
+    {
+    }
+
     public (bool halt, int consumedFromOrigin) ProcessReceive(ref ReadOnlyMemory<byte> input,
         out ReadOnlyMemory<byte> output)
     {
@@ -48,5 +52,9 @@ public class PacketFrameMiddleware : INetMiddleware
         output = input.Slice(4);
         // Set the consumed from origin to 4 + the length of the packet.
         return (false, 4 + (int)length);
+    }
+
+    public void PostReceive()
+    {
     }
 }

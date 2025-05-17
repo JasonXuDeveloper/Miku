@@ -18,6 +18,10 @@ public class Lz4CompressionMiddleware : INetMiddleware
         output = _buffer.WrittenMemory;
     }
 
+    public void PostSend()
+    {
+    }
+
     public (bool halt, int consumedFromOrigin) ProcessReceive(ref ReadOnlyMemory<byte> input,
         out ReadOnlyMemory<byte> output)
     {
@@ -32,5 +36,9 @@ public class Lz4CompressionMiddleware : INetMiddleware
             output = ReadOnlyMemory<byte>.Empty;
             return (true, 0);
         }
+    }
+
+    public void PostReceive()
+    {
     }
 }
