@@ -91,7 +91,7 @@ namespace Miku.Core
         private void StartAccept()
         {
             // If the accept socket is null, then the server is stopped.
-            if (_acceptEventArgs == null || _listenSocket == null)
+            if (_acceptEventArgs == null)
             {
                 return;
             }
