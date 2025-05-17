@@ -134,7 +134,7 @@ namespace Miku.Core
             _socket.NoDelay = true;
             Interlocked.Exchange(ref _isConnected, 1);
             Ip = ((System.Net.IPEndPoint)socket.RemoteEndPoint!).Address.ToString();
-            
+
             _receivedData = new ArrayBufferWriter<byte>(bufferSize);
             _sendQueue = new ConcurrentQueue<ArraySegment<byte>>();
 
@@ -164,6 +164,7 @@ namespace Miku.Core
             {
                 return;
             }
+
             Interlocked.Exchange(ref _isConnected, 0);
             Interlocked.Exchange(ref _sending, 0);
 
@@ -440,30 +441,41 @@ namespace Miku.Core
                 cont_receive:
                 if (totalConsumed > 0)
                 {
-                    // copy tail of receivedData to a temporary buffer
-                    if (hasLeftover)
+                    // not completely consumed
+                    if (totalConsumed < args.BytesTransferred)
                     {
-                        byte[] tempBuffer =
-                            ArrayPool<byte>.Shared.Rent(client._receivedData.WrittenCount - totalConsumed);
-                        client._receivedData.WrittenMemory.Span.Slice(totalConsumed).CopyTo(tempBuffer);
-                        client._receivedData.Clear();
-                        client._receivedData.Write(tempBuffer);
-                        ArrayPool<byte>.Shared.Return(tempBuffer);
+                        // copy tail of receivedData to a temporary buffer
+                        if (hasLeftover)
+                        {
+                            byte[] tempBuffer =
+                                ArrayPool<byte>.Shared.Rent(client._receivedData.WrittenCount - totalConsumed);
+                            client._receivedData.WrittenMemory.Span.Slice(totalConsumed).CopyTo(tempBuffer);
+                            client._receivedData.Clear();
+                            client._receivedData.Write(tempBuffer);
+                            ArrayPool<byte>.Shared.Return(tempBuffer);
+                        }
+                        else
+                        {
+                            client._receivedData.Clear();
+                            client._receivedData.Write(args.Buffer.AsSpan(totalConsumed,
+                                args.BytesTransferred - totalConsumed));
+                        }
                     }
                     else
                     {
                         client._receivedData.Clear();
-                        client._receivedData.Write(args.Buffer.AsSpan(totalConsumed,
-                            args.BytesTransferred - totalConsumed));
                     }
                 }
+                // consumed nothing
                 else
                 {
-                    // reset buffer
-                    if (client._receivedData.WrittenCount > 0)
+                    if (hasLeftover)
+                    {
                         client._receivedData.Clear();
-                }
+                    }
 
+                    client._receivedData.Write(processData.Span);
+                }
 
                 if (client._socket != null)
                 {
