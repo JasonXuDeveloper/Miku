@@ -7,10 +7,9 @@ This tool addresses [Issue #1](https://github.com/JasonXuDeveloper/Miku/issues/1
 ## Features
 
 - **Single unified application** with server and client commands
-- **Clean CLI argument parsing** using ConsoleAppFramework
 - **Multiple test scenarios**: Echo, broadcast, silent (server) / burst, sustained, latency (client)
 - **Real-time performance metrics**: Messages/sec, MB/sec, round-trip times
-- **Configurable parameters**: Message sizes (100-500 bytes as requested), rates, duration, client counts
+- **Configurable parameters**: Message sizes, rates, duration, client counts
 - **Interactive server commands**: Change modes, reset metrics, view detailed stats
 - **Interactive menu**: Run without any arguments to launch an interactive prompt for Server or Client modes
 - **Live controls**: Press `R` to reset the current metrics during a live test
@@ -152,50 +151,6 @@ dotnet run --project Miku.PerformanceTest/Miku.PerformanceTest.csproj client --m
 - Time from sending a message to receiving the response
 - Critical for interactive applications
 - Only meaningful in echo mode or latency testing
-
-## Performance Considerations
-
-As discussed in [Issue #1](https://github.com/JasonXuDeveloper/Miku/issues/1), performance depends on several factors:
-
-### 1. **Bandwidth Limitations**
-- Network bandwidth often limits throughput
-- Local (LAN) testing shows higher performance than remote testing
-
-### 2. **System Call Overhead**
-- High-frequency sending (1000+ msg/s) may be limited by system call overhead
-- The Miku library utilizes all CPU cores to mitigate this
-
-### 3. **Test Scenario Impact**
-- **Echo mode**: 2x network traffic (send + receive)
-- **Broadcast mode**: N×M traffic (N clients × M message size × client count)
-- **Silent mode**: Minimal traffic, tests pure receiving performance
-
-### 4. **Message Size Effects**
-- Smaller messages (100 bytes): Higher messages/sec, lower MB/sec
-- Larger messages (500 bytes): Lower messages/sec, higher MB/sec
-
-## ConsoleAppFramework Benefits
-
-This tool leverages [ConsoleAppFramework](https://github.com/Cysharp/ConsoleAppFramework) for:
-
-- **Zero reflection, zero allocation** CLI parsing
-- **Native AOT compatibility** for fast startup
-- **Automatic help generation** from XML documentation
-- **Type-safe parameter binding**
-- **Clean, declarative command structure**
-
-## Building for Production
-
-```bash
-# Release build
-dotnet build -c Release
-
-# Publish as self-contained executable
-dotnet publish -c Release -r win-x64 --self-contained
-
-# Native AOT (requires .NET 8+)
-dotnet publish -c Release -r win-x64 -p:PublishAot=true
-```
 
 ## Contributing
 
