@@ -34,7 +34,7 @@ namespace Miku.Core
         /// <summary>
         /// The size of the buffer used for sending and receiving data.
         /// </summary>
-        public int BufferSize { get; set; } = 64 * 1024; // Increased default buffer size
+        public int BufferSize { get; set; } = 64 * 1024;
 
         private Socket _listenSocket;
         private SocketAsyncEventArgs _acceptEventArgs;
