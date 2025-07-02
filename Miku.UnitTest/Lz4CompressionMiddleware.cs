@@ -9,27 +9,23 @@ namespace Miku.UnitTest;
 /// </summary>
 public class Lz4CompressionMiddleware : INetMiddleware
 {
-    private readonly ArrayBufferWriter<byte> _buffer = new ArrayBufferWriter<byte>();
 
-    public void ProcessSend(ref ReadOnlyMemory<byte> input, out ReadOnlyMemory<byte> output)
+    public void ProcessSend(ReadOnlyMemory<byte> input, ArrayBufferWriter<byte> output)
     {
-        _buffer.Clear();
-        LZ4Pickler.Pickle(input.Span, _buffer);
-        output = _buffer.WrittenMemory;
+        LZ4Pickler.Pickle(input.Span, output);
     }
 
-    public (bool halt, int consumedFromOrigin) ProcessReceive(ref ReadOnlyMemory<byte> input,
-        out ReadOnlyMemory<byte> output)
+    public (bool halt, int consumedFromOrigin) ProcessReceive(ReadOnlyMemory<byte> input,
+        ArrayBufferWriter<byte> output)
     {
         try
         {
-            output = LZ4Pickler.Unpickle(input.Span);
+            LZ4Pickler.Unpickle(input.Span, output);
             return (false, 0);
         }
         catch (Exception e)
         {
             Console.WriteLine(e);
-            output = ReadOnlyMemory<byte>.Empty;
             return (true, 0);
         }
     }

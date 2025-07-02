@@ -3,9 +3,9 @@
     <PropertyGroup>
         <ImplicitUsings>disable</ImplicitUsings>
         <Nullable>disable</Nullable>
-        <LangVersion>9</LangVersion>
+        <LangVersion>11</LangVersion>
         <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
-        <Version>1.0.6</Version>
+        <Version>2.0.0</Version>
         <PackageId>Miku</PackageId>
         <Title>Miku</Title>
         <Authors>JasonXuDeveloper</Authors>
@@ -17,14 +17,13 @@
         <PackageTags>TCP;Networking;High-Perofrmance</PackageTags>
         <PackageLicenseExpression>MIT</PackageLicenseExpression>
         <PackageReadmeFile>README.md</PackageReadmeFile>
-        <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+        <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
         <BranchName>refs/heads/main</BranchName>
-        <TargetFrameworks>net6.0;netstandard2.1;</TargetFrameworks>
+        <TargetFrameworks>net6.0;net8.0;netstandard2.1;</TargetFrameworks>
         <PublishRepositoryUrl>true</PublishRepositoryUrl>
         <EmbedUntrackedSources>true</EmbedUntrackedSources>
         <IncludeSource>true</IncludeSource>
         <DebugType>embedded</DebugType>
-        <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
     </PropertyGroup>
 
     <!--  for .NET Standard  -->
@@ -48,6 +47,7 @@
         <PackageReference Include="System.Buffers" Version="4.6.0"/>
         <PackageReference Include="System.Memory" Version="4.6.0"/>
         <PackageReference Include="System.Runtime.CompilerServices.Unsafe" Version="6.1.0"/>
+        <PackageReference Include="System.Threading.Channels" Version="7.0.0"/>
     </ItemGroup>
 
 </Project>

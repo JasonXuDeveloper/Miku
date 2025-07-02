@@ -1,4 +1,5 @@
 using System;
+using System.Buffers;
 
 namespace Miku.Core
 {
@@ -10,17 +11,16 @@ namespace Miku.Core
         /// <summary>
         /// Process data before sending
         /// </summary>
-        /// <param name="input">A data to be sent (might be processed by other middleware)</param>
-        /// <param name="output">A processed data to be sent</param>
-        void ProcessSend(ref ReadOnlyMemory<byte> input, out ReadOnlyMemory<byte> output);
+        /// <param name="src">Source data to be processed</param>
+        /// <param name="dst">Destination buffer to write processed data to</param>
+        void ProcessSend(ReadOnlyMemory<byte> src, ArrayBufferWriter<byte> dst);
 
         /// <summary>
         /// Process data after receiving
         /// </summary>
-        /// <param name="input">A received data (might be processed by other middleware)</param>
-        /// <param name="output">A processed data to be passed to the next middleware</param>
-        /// <returns>Whether to halt the processing and how many bytes are consumed</returns>
-        (bool halt, int consumedFromOrigin) ProcessReceive(ref ReadOnlyMemory<byte> input,
-            out ReadOnlyMemory<byte> output);
+        /// <param name="src">Source data to be processed</param>
+        /// <param name="dst">Destination buffer to write processed data to</param>
+        /// <returns>Whether to halt the processing and how many bytes are consumed from the original input</returns>
+        (bool halt, int consumedFromOrigin) ProcessReceive(ReadOnlyMemory<byte> src, ArrayBufferWriter<byte> dst);
     }
 }

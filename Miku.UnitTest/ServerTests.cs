@@ -32,9 +32,9 @@ public class ServerTests
         // Create a new server.
         var server = new NetServer();
         server.OnClientConnected += client => { Console.WriteLine($"Client connected: {client.Ip}"); };
-        server.OnClientDisconnected += client =>
+        server.OnClientDisconnected += (client, reason) =>
         {
-            Console.WriteLine($"Client disconnected: {client.Ip}");
+            Console.WriteLine($"Client disconnected: {client.Ip}, reason: {reason}");
             server.Stop();
         };
         server.OnClientDataReceived += (client, data) =>
@@ -82,7 +82,10 @@ public class ServerTests
         // Create a new server.
         var server = new NetServer();
         server.OnClientConnected += client => { Console.WriteLine($"Client connected: {client.Ip}"); };
-        server.OnClientDisconnected += client => { Console.WriteLine($"Client disconnected: {client.Ip}"); };
+        server.OnClientDisconnected += (client, reason) =>
+        {
+            Console.WriteLine($"Client disconnected: {client.Ip}, reason: {reason}");
+        };
         server.OnClientDataReceived += (client, data) =>
         {
             Console.WriteLine($"Data received from {client.Ip}: {string.Join(',', data.ToArray())}");
@@ -98,9 +101,9 @@ public class ServerTests
 
         // Simulate a client connecting to the server.
         var client = new NetClient();
-        client.OnDisconnected += () =>
+        client.OnDisconnected += (reason) =>
         {
-            Console.WriteLine("Client disconnected");
+            Console.WriteLine($"Client disconnected: {reason}");
             tcs.SetResult(true);
         };
 
@@ -130,7 +133,7 @@ public class ServerTests
         // Create a new server.
         var server = new NetServer();
         server.OnClientConnected += client => { Console.WriteLine($"Client connected: {client.Ip}"); };
-        server.OnClientDisconnected += client => { Console.WriteLine($"Client disconnected: {client.Ip}"); };
+        server.OnClientDisconnected += (client, reason) => { Console.WriteLine($"Client disconnected: {client.Ip}, reason: {reason}"); };
         server.OnClientDataReceived += (client, data) =>
         {
             Console.WriteLine($"Data received from {client.Ip}: {string.Join(',', data.ToArray())}");
@@ -185,7 +188,7 @@ public class ServerTests
             // Add the middleware to the client.
             client.AddMiddleware(new PacketFrameMiddleware());
         };
-        server.OnClientDisconnected += client => { Console.WriteLine($"Client disconnected: {client.Ip}"); };
+        server.OnClientDisconnected += (client, reason) => { Console.WriteLine($"Client disconnected: {client.Ip}, reason: {reason}"); };
         server.OnClientDataReceived += (client, data) =>
         {
             Console.WriteLine($"Data received from {client.Ip}: {string.Join(',', data.ToArray())}");
@@ -242,7 +245,7 @@ public class ServerTests
             client.AddMiddleware(new Lz4CompressionMiddleware());
             client.AddMiddleware(new PacketFrameMiddleware());
         };
-        server.OnClientDisconnected += client => { Console.WriteLine($"Client disconnected: {client.Ip}"); };
+        server.OnClientDisconnected += (client, reason) => { Console.WriteLine($"Client disconnected: {client.Ip}, reason: {reason}"); };
         server.OnClientDataReceived += (client, data) =>
         {
             Console.WriteLine($"Data received from {client.Ip}: {string.Join(',', data.ToArray())}");
@@ -320,7 +323,7 @@ public class ServerTests
             client.AddMiddleware(new Lz4CompressionMiddleware());
             client.AddMiddleware(new PacketFrameMiddleware());
         };
-        server.OnClientDisconnected += client => { Console.WriteLine($"Client disconnected: {client.Ip}"); };
+        server.OnClientDisconnected += (client, reason) => { Console.WriteLine($"Client disconnected: {client.Ip}, reason: {reason}"); };
         server.OnClientDataReceived += (client, data) =>
         {
             Console.WriteLine($"Data received from {client.Ip}: {string.Join(',', data.ToArray())}");
